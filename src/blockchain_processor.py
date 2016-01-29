@@ -13,6 +13,10 @@ from processor import Processor, print_log
 from storage import Storage
 from utils import logger, hash_decode, hash_encode, Hash, header_from_string, header_to_string, ProfiledThread, rev_hex, int_to_hex
 
+
+HEADER_SIZE = 112
+
+
 class BlockchainProcessor(Processor):
 
     def __init__(self, config, shared):
@@ -153,6 +157,7 @@ class BlockchainProcessor(Processor):
             "version": b.get('version'),
             "prev_block_hash": b.get('previousblockhash'),
             "merkle_root": b.get('merkleroot'),
+            "claim_trie_root": b.get('nccroot'),
             "timestamp": b.get('time'),
             "bits": int(b.get('bits'), 16),
             "nonce": b.get('nonce'),
@@ -167,7 +172,7 @@ class BlockchainProcessor(Processor):
         self.headers_filename = os.path.join(self.headers_path, 'blockchain_headers')
 
         if os.path.exists(self.headers_filename):
-            height = os.path.getsize(self.headers_filename)/80 - 1   # the current height
+            height = os.path.getsize(self.headers_filename)/HEADER_SIZE - 1   # the current height
             if height > 0:
                 prev_hash = self.hash_header(self.read_header(height))
             else:
@@ -210,16 +215,16 @@ class BlockchainProcessor(Processor):
     def read_header(self, block_height):
         if os.path.exists(self.headers_filename):
             with open(self.headers_filename, 'rb') as f:
-                f.seek(block_height * 80)
-                h = f.read(80)
-            if len(h) == 80:
+                f.seek(block_height * HEADER_SIZE)
+                h = f.read(HEADER_SIZE)
+            if len(h) == HEADER_SIZE:
                 h = header_from_string(h)
                 return h
 
     def read_chunk(self, index):
         with open(self.headers_filename, 'rb') as f:
-            f.seek(index*2016*80)
-            chunk = f.read(2016*80)
+            f.seek(index*2016*HEADER_SIZE)
+            chunk = f.read(2016*HEADER_SIZE)
         return chunk.encode('hex')
 
     def write_header(self, header, sync=True):
@@ -244,7 +249,7 @@ class BlockchainProcessor(Processor):
         if not self.headers_data:
             return
         with open(self.headers_filename, 'rb+') as f:
-            f.seek(self.headers_offset*80)
+            f.seek(self.headers_offset*HEADER_SIZE)
             f.write(self.headers_data)
         self.headers_data = ''
 

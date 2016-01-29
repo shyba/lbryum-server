@@ -50,6 +50,7 @@ hash_decode = lambda x: x.decode('hex')[::-1]
 
 
 def header_to_string(res):
+    logger.info("res: %s" % res)
     pbh = res.get('prev_block_hash')
     if pbh is None:
         pbh = '0'*64
@@ -57,6 +58,7 @@ def header_to_string(res):
     return int_to_hex(res.get('version'), 4) \
         + rev_hex(pbh) \
         + rev_hex(res.get('merkle_root')) \
+        + rev_hex(res.get('claim_trie_root')) \
         + int_to_hex(int(res.get('timestamp')), 4) \
         + int_to_hex(int(res.get('bits')), 4) \
         + int_to_hex(int(res.get('nonce')), 4)
@@ -71,9 +73,10 @@ def header_from_string(s):
         'version': hex_to_int(s[0:4]),
         'prev_block_hash': hash_encode(s[4:36]),
         'merkle_root': hash_encode(s[36:68]),
-        'timestamp': hex_to_int(s[68:72]),
-        'bits': hex_to_int(s[72:76]),
-        'nonce': hex_to_int(s[76:80]),
+        'claim_trie_root': hash_encode(s[68:100]),
+        'timestamp': hex_to_int(s[100:104]),
+        'bits': hex_to_int(s[104:108]),
+        'nonce': hex_to_int(s[108:112]),
     }
 
 

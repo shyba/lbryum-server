@@ -4,7 +4,7 @@ params = {
     'bitcoin_main': {
         'pubkey_address': 0,
         'script_address': 5,
-        'genesis_hash': '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
+        'genesis_hash': '0000343f59c49eb433ba3a37ee4b3493ff014ee9b266f610bb3cd1b36927787a'
     },
     'bitcoin_test': {
         'pubkey_address': 111,
