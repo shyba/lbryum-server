@@ -17,6 +17,9 @@ from utils import logger, hash_decode, hash_encode, Hash, header_from_string, he
 HEADER_SIZE = 112
 
 
+BLOCKS_PER_CHUNK = 720
+
+
 class BlockchainProcessor(Processor):
 
     def __init__(self, config, shared):
@@ -223,8 +226,8 @@ class BlockchainProcessor(Processor):
 
     def read_chunk(self, index):
         with open(self.headers_filename, 'rb') as f:
-            f.seek(index*2016*HEADER_SIZE)
-            chunk = f.read(2016*HEADER_SIZE)
+            f.seek(index*BLOCKS_PER_CHUNK*HEADER_SIZE)
+            chunk = f.read(BLOCKS_PER_CHUNK*HEADER_SIZE)
         return chunk.encode('hex')
 
     def write_header(self, header, sync=True):
@@ -236,7 +239,7 @@ class BlockchainProcessor(Processor):
             self.flush_headers()
 
         with self.cache_lock:
-            chunk_index = header.get('block_height')/2016
+            chunk_index = header.get('block_height')/BLOCKS_PER_CHUNK
             if self.chunk_cache.get(chunk_index):
                 self.chunk_cache.pop(chunk_index)
 
@@ -585,6 +588,21 @@ class BlockchainProcessor(Processor):
         elif method == 'blockchain.relayfee':
             result = self.relayfee
 
+        elif method == 'blockchain.claimtrie.getvalue':
+            name = params[0]
+            args = (name,)
+            if len(params) == 2:
+                block_hash = params[1]
+                args = args + (block_hash,)
+            proof = self.bitcoind('getnameproof', args)
+            result = {'proof': proof}
+            if 'txhash' in proof and 'nOut' in proof:
+                transaction = self.bitcoind('getrawtransaction', (proof['txhash'],))
+                result['transaction'] = transaction
+        elif method == 'blockchain.claimtrie.getclaimsintx':
+            txid = params[0]
+            args = (txid,)
+            result = self.bitcoind('getclaimsfortx', args)
         else:
             raise BaseException("unknown method:%s" % method)
 
