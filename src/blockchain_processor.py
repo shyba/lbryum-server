@@ -607,6 +607,8 @@ class BlockchainProcessor(Processor):
             blockhash = params[0]
             args = (blockhash,)
             result = self.bitcoind('getblock', args)
+        elif method == 'blockchain.claimtrie.get':
+            result = self.bitcoind('getnametrie')
         else:
             raise BaseException("unknown method:%s" % method)
 
