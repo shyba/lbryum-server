@@ -603,6 +603,10 @@ class BlockchainProcessor(Processor):
             txid = params[0]
             args = (txid,)
             result = self.bitcoind('getclaimsfortx', args)
+        elif method == 'blockchain.block.get_block':
+            blockhash = params[0]
+            args = (blockhash,)
+            result = self.bitcoind('getblock', args)
         else:
             raise BaseException("unknown method:%s" % method)
 
