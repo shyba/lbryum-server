@@ -330,12 +330,32 @@ def match_decoded(decoded, to_match):
 
 
 
+def decode_claim_script(decoded_script):
+    if len(decoded_script) <= 6:
+        return False
+    if decoded_script[0][0] != 0:
+        return False
+    if not (0 < decoded_script[1][0] <= opcodes.OP_PUSHDATA4):
+        return False
+    name = decoded_script[1][1]
+    if not (0 < decoded_script[2][0] <= opcodes.OP_PUSHDATA4):
+        return False
+    value = decoded_script[2][1]
+    if decoded_script[3][0] != opcodes.OP_2DROP:
+        return False
+    if decoded_script[4][0] != opcodes.OP_DROP:
+        return False
+    return name, value, decoded_script[5:]
+
 
 def get_address_from_output_script(bytes):
     try:
         decoded = [ x for x in script_GetOp(bytes) ]
     except:
         return None
+    r = decode_claim_script(decoded)
+    if r is not False:
+        claim_name, claim_value, decoded = r
 
     # The Genesis Block, self-payments, and pay-by-IP-address payments look like:
     # 65 BYTES:... CHECKSIG
