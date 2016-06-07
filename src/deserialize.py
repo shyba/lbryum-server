@@ -329,42 +329,40 @@ def match_decoded(decoded, to_match):
     return True
 
 
-class BaseClaim(object):
-    pass
-
-
-class NameClaim(BaseClaim):
+class NameClaim(object):
     def __init__(self, name, value):
         self.name = name
         self.value = value
-        BaseClaim.__init__(self)
 
 
-class ClaimUpdate(NameClaim):
+class ClaimUpdate(object):
     def __init__(self, name, value, claim_id):
-        NameClaim.__init__(self, name, value)
+        self.name = name
+        self.value = value
         self.claim_id = claim_id
 
 
-class ClaimSupport(BaseClaim):
-    def __init__(self, name, claimId):
+class ClaimSupport(object):
+    def __init__(self, name, claim_id):
         self.name = name
-        self.claimId = claimId
-        BaseClaim.__init__(self)
+        self.claim_id = claim_id
 
 
 def decode_claim_script(decoded_script):
     if len(decoded_script) <= 6:
         return False
     op = 0
-    if decoded_script[0][0] not in [
+    claim_type = decoded_script[op][0]
+    if claim_type == opcodes.OP_UPDATE_CLAIM:
+        if len(decoded_script) <= 7:
+            return False
+    if claim_type not in [
         opcodes.OP_CLAIM_NAME,
         opcodes.OP_SUPPORT_CLAIM,
         opcodes.OP_UPDATE_CLAIM
     ]:
         return False
     op += 1
-    name = None
     value = None
     claim_id = None
     claim = None
@@ -392,13 +390,20 @@ def decode_claim_script(decoded_script):
     op += 1
     if decoded_script[op][0] != opcodes.OP_DROP:
         return False
+    op += 1
     if decoded_script[0] == opcodes.OP_CLAIM_NAME:
+        if name is None or value is None:
+            return False
         claim = NameClaim(name, value)
     elif decoded_script[0] == opcodes.OP_UPDATE_CLAIM:
+        if name is None or value is None or claim_id is None:
+            return False
         claim = ClaimUpdate(name, value, claim_id)
     elif decoded_script[0] == opcodes.OP_SUPPORT_CLAIM:
+        if name is None or claim_id is None:
+            return False
         claim = ClaimSupport(name, claim_id)
-    return claim, decoded_script[5:]
+    return claim, decoded_script[op:]
 
 
 def get_address_from_output_script(bytes):
