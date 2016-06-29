@@ -1,5 +1,6 @@
 ﻿import hashlib
 from json import dumps, load
+import json
 import os
 from Queue import Queue
 import random
@@ -138,24 +139,19 @@ class BlockchainProcessor(Processor):
         while True:
             try:
                 r = AuthServiceProxy(self.lbrycrdd_url, method).__call__(*args)
-                if r['error'] is not None:
-                    if r['error'].get('code') == -28:
-                        print_log("lbrycrdd still warming up...")
-                        self.wait_on_lbrycrdd()
-                        continue
-                    else:
-                        print_log(r)
-                        print_log(json.loads(r['error'])['message'])
-                        raise BaseException(r['error'])
-                else:
-                    break
-            except Exception as e:
-                print_log(e.message)
-                print_log(e.args)
-                print_log("cannot reach lbrycrdd...")
-                self.wait_on_lbrycrdd()
-
-        return r['result']
+                return r
+            except JSONRPCException as j:
+                r = "no response"
+                if j.error['code'] == -28:
+                    print_log("lbrycrdd still warming up...")
+                    self.wait_on_lbrycrdd()
+                    continue
+                elif j.error['code'] == -343:
+                    print_log("missing JSON-RPC result")
+                    raise BaseException(j.error)
+                elif j.error['code'] == -342:
+                    print_log("missing HTTP response from server")
+                    raise BaseException(j.error)
 
     @staticmethod
     def block2header(b):
