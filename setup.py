@@ -1,33 +1,33 @@
 from setuptools import setup
 
 setup(
-    name="electrum-server",
+    name="lbryum-server",
     version="1.0",
-    scripts=['run_electrum_server.py','electrum-server'],
+    scripts=['run_lbryum_server.py','lbryum-server'],
     install_requires=['plyvel','jsonrpclib', 'irc>=11'],
     package_dir={
-        'electrumserver':'src'
+        'lbryumserver':'src'
         },
     py_modules=[
-        'electrumserver.__init__',
-        'electrumserver.utils',
-        'electrumserver.storage',
-        'electrumserver.deserialize',
-        'electrumserver.networks',
-        'electrumserver.blockchain_processor',
-        'electrumserver.server_processor',
-        'electrumserver.processor',
-        'electrumserver.version',
-        'electrumserver.ircthread',
-        'electrumserver.stratum_tcp',
-        'electrumserver.stratum_http'
+        'lbryumserver.__init__',
+        'lbryumserver.utils',
+        'lbryumserver.storage',
+        'lbryumserver.deserialize',
+        'lbryumserver.networks',
+        'lbryumserver.blockchain_processor',
+        'lbryumserver.server_processor',
+        'lbryumserver.processor',
+        'lbryumserver.version',
+        'lbryumserver.ircthread',
+        'lbryumserver.stratum_tcp',
+        'lbryumserver.stratum_http'
     ],
-    description="Bitcoin Electrum Server",
+    description="LBRY Electrum Server",
     author="Thomas Voegtlin",
     author_email="thomasv1@gmx.de",
     license="GNU Affero GPLv3",
-    url="https://github.com/spesmilo/electrum-server/",
-    long_description="""Server for the Electrum Lightweight Bitcoin Wallet"""
+    url="https://github.com/spesmilo/lbryum-server/",
+    long_description="""Server for the Electrum Lightweight LBRY Wallet"""
 )
 
 

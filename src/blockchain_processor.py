@@ -62,10 +62,10 @@ class BlockchainProcessor(Processor):
         self.storage = Storage(config, shared, self.test_reorgs)
 
         self.lbrycrdd_url = 'http://%s:%s@%s:%s/' % (
-            config.get('bitcoind', 'bitcoind_user'),
-            config.get('bitcoind', 'bitcoind_password'),
-            config.get('bitcoind', 'bitcoind_host'),
-            config.get('bitcoind', 'bitcoind_port'))
+            config.get('lbrycrdd', 'lbrycrdd_user'),
+            config.get('lbrycrdd', 'lbrycrdd_password'),
+            config.get('lbrycrdd', 'lbrycrdd_host'),
+            config.get('lbrycrdd', 'lbrycrdd_port'))
 
         self.sent_height = 0
         self.sent_header = None
@@ -94,7 +94,7 @@ class BlockchainProcessor(Processor):
         while not self.shared.stopped():
             self.main_iteration()
             if self.shared.paused():
-                print_log("bitcoind is responding")
+                print_log("lbrycrdd is responding")
                 self.shared.unpause()
             time.sleep(10)
 
@@ -117,7 +117,7 @@ class BlockchainProcessor(Processor):
             msg = "block %d (%d %.2fs) %s" %(self.storage.height, num_tx, delta, self.storage.get_root_hash().encode('hex'))
             msg += " (%.2ftx/s, %.2fs/block)" % (tx_per_second, seconds_per_block)
             run_blocks = self.storage.height - self.start_catchup_height
-            remaining_blocks = self.bitcoind_height - self.storage.height
+            remaining_blocks = self.lbrycrdd_height - self.storage.height
             if run_blocks>0 and remaining_blocks>0:
                 remaining_minutes = remaining_blocks * seconds_per_block / 60
                 new_blocks = int(remaining_minutes / 10) # number of new blocks expected during catchup
@@ -425,7 +425,7 @@ class BlockchainProcessor(Processor):
 
         # add undo info
         if not revert:
-            self.storage.write_undo_info(block_height, self.bitcoind_height, undo_info)
+            self.storage.write_undo_info(block_height, self.lbrycrdd_height, undo_info)
 
         # add the max
         self.storage.save_height(block_hash, block_height)
@@ -642,9 +642,9 @@ class BlockchainProcessor(Processor):
             # are we done yet?
             info = self.lbrycrdd('getinfo')
             self.relayfee = info.get('relayfee')
-            self.bitcoind_height = info.get('blocks')
-            bitcoind_block_hash = self.lbrycrdd('getblockhash', (self.bitcoind_height,))
-            if self.storage.last_hash == bitcoind_block_hash:
+            self.lbrycrdd_height = info.get('blocks')
+            lbrycrdd_block_hash = self.lbrycrdd('getblockhash', (self.lbrycrdd_height,))
+            if self.storage.last_hash == lbrycrdd_block_hash:
                 self.up_to_date = True
                 break
 

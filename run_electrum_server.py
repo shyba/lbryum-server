@@ -28,14 +28,14 @@ import imp
 
 
 if os.path.dirname(os.path.realpath(__file__)) == os.getcwd():
-    imp.load_module('electrumserver', *imp.find_module('src'))
+    imp.load_module('lbryumserver', *imp.find_module('src'))
 
-from electrumserver import storage, networks, utils
-from electrumserver.processor import Dispatcher, print_log
-from electrumserver.server_processor import ServerProcessor
-from electrumserver.blockchain_processor import BlockchainProcessor
-from electrumserver.stratum_tcp import TcpServer
-from electrumserver.stratum_http import HttpServer
+from lbryumserver import storage, networks, utils
+from lbryumserver.processor import Dispatcher, print_log
+from lbryumserver.server_processor import ServerProcessor
+from lbryumserver.blockchain_processor import BlockchainProcessor
+from lbryumserver.stratum_tcp import TcpServer
+from lbryumserver.stratum_http import HttpServer
 
 
 logging.basicConfig()
@@ -81,9 +81,9 @@ def create_config(filename=None):
     # set some defaults, which will be overwritten by the config file
     config.add_section('server')
     config.set('server', 'banner', 'Welcome to Electrum!')
-    config.set('server', 'banner_file', '/etc/electrum.banner')
+    config.set('server', 'banner_file', '/etc/lbryum.banner')
     config.set('server', 'host', 'localhost')
-    config.set('server', 'electrum_rpc_port', '8000')
+    config.set('server', 'lbryum_rpc_port', '8000')
     config.set('server', 'report_host', '')
     config.set('server', 'stratum_tcp_port', '50001')
     config.set('server', 'stratum_http_port', '')
@@ -98,12 +98,12 @@ def create_config(filename=None):
     config.set('server', 'irc', 'no')
     config.set('server', 'irc_nick', '')
     config.set('server', 'coin', '')
-    config.set('server', 'logfile', '/var/log/electrum.log')
+    config.set('server', 'logfile', '/var/log/lbryum.log')
     config.set('server', 'donation_address', '')
     config.set('server', 'max_subscriptions', '10000')
 
     config.add_section('leveldb')
-    config.set('leveldb', 'path', '/dev/shm/electrum_db')
+    config.set('leveldb', 'path', '/dev/shm/lbryum_db')
     config.set('leveldb', 'pruning_limit', '100')
     config.set('leveldb', 'utxo_cache', str(64*1024*1024))
     config.set('leveldb', 'hist_cache', str(128*1024*1024))
@@ -117,12 +117,12 @@ def create_config(filename=None):
     # try to find the config file in the default paths
     if not filename:
         for path in ('/etc/', ''):
-            filename = path + 'electrum.conf'
+            filename = path + 'lbryum.conf'
             if os.path.isfile(filename):
                 break
 
     if not os.path.isfile(filename):
-        print 'could not find electrum configuration file "%s"' % filename
+        print 'could not find lbryum configuration file "%s"' % filename
         sys.exit(1)
 
     attempt_read_config(config, filename)
@@ -132,10 +132,10 @@ def create_config(filename=None):
     return config
 
 
-def run_rpc_command(params, electrum_rpc_port):
+def run_rpc_command(params, lbryum_rpc_port):
     cmd = params[0]
     import xmlrpclib
-    server = xmlrpclib.ServerProxy('http://localhost:%d' % electrum_rpc_port)
+    server = xmlrpclib.ServerProxy('http://localhost:%d' % lbryum_rpc_port)
     func = getattr(server, cmd)
     r = func(*params[1:])
     if cmd == 'sessions':
@@ -295,18 +295,18 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = create_config(args.conf)
 
-    electrum_rpc_port = get_port(config, 'electrum_rpc_port')
+    lbryum_rpc_port = get_port(config, 'lbryum_rpc_port')
 
     if len(args.command) >= 1:
         try:
-            run_rpc_command(args.command, electrum_rpc_port)
+            run_rpc_command(args.command, lbryum_rpc_port)
         except socket.error:
             print "server not running"
             sys.exit(1)
         sys.exit(0)
 
     try:
-        run_rpc_command(['getpid'], electrum_rpc_port)
+        run_rpc_command(['getpid'], lbryum_rpc_port)
         is_running = True
     except socket.error:
         is_running = False
@@ -318,7 +318,7 @@ if __name__ == '__main__':
     start_server(config)
 
     from SimpleXMLRPCServer import SimpleXMLRPCServer
-    server = SimpleXMLRPCServer(('localhost', electrum_rpc_port), allow_none=True, logRequests=False)
+    server = SimpleXMLRPCServer(('localhost', lbryum_rpc_port), allow_none=True, logRequests=False)
     server.register_function(lambda: os.getpid(), 'getpid')
     server.register_function(shared.stop, 'stop')
     server.register_function(cmd_getinfo, 'getinfo')
