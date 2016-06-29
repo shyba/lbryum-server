@@ -7,6 +7,7 @@ import sys
 import time
 import threading
 import urllib
+from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 
 import deserialize
 from processor import Processor, print_log
@@ -60,7 +61,7 @@ class BlockchainProcessor(Processor):
             self.test_reorgs = False
         self.storage = Storage(config, shared, self.test_reorgs)
 
-        self.bitcoind_url = 'http://%s:%s@%s:%s/' % (
+        self.lbrycrdd_url = 'http://%s:%s@%s:%s/' % (
             config.get('bitcoind', 'bitcoind_user'),
             config.get('bitcoind', 'bitcoind_password'),
             config.get('bitcoind', 'bitcoind_host'),
@@ -82,7 +83,7 @@ class BlockchainProcessor(Processor):
 
 
     def do_catch_up(self):
-        self.header = self.block2header(self.bitcoind('getblock', (self.storage.last_hash,)))
+        self.header = self.block2header(self.lbrycrdd('getblock', (self.storage.last_hash,)))
         self.header['utxo_root'] = self.storage.get_root_hash().encode('hex')
         self.catch_up(sync=False)
         if not self.shared.stopped():
@@ -126,32 +127,35 @@ class BlockchainProcessor(Processor):
                 msg += " (eta %s, %d blocks)" % (rt, remaining_blocks)
             print_log(msg)
 
-    def wait_on_bitcoind(self):
+    def wait_on_lbrycrdd(self):
         self.shared.pause()
         time.sleep(10)
         if self.shared.stopped():
             # this will end the thread
             raise BaseException()
 
-    def bitcoind(self, method, params=()):
-        postdata = dumps({"method": method, 'params': params, 'id': 'jsonrpc'})
+    def lbrycrdd(self, method, args=()):
         while True:
             try:
-                response = urllib.urlopen(self.bitcoind_url, postdata)
-                r = load(response)
-                response.close()
-            except:
-                print_log("cannot reach bitcoind...")
-                self.wait_on_bitcoind()
-            else:
+                r = AuthServiceProxy(self.lbrycrdd_url, method).__call__(*args)
                 if r['error'] is not None:
                     if r['error'].get('code') == -28:
-                        print_log("bitcoind still warming up...")
-                        self.wait_on_bitcoind()
+                        print_log("lbrycrdd still warming up...")
+                        self.wait_on_lbrycrdd()
                         continue
-                    raise BaseException(r['error'])
-                break
-        return r.get('result')
+                    else:
+                        print_log(r)
+                        print_log(json.loads(r['error'])['message'])
+                        raise BaseException(r['error'])
+                else:
+                    break
+            except Exception as e:
+                print_log(e.message)
+                print_log(e.args)
+                print_log("cannot reach lbrycrdd...")
+                self.wait_on_lbrycrdd()
+
+        return r['result']
 
     @staticmethod
     def block2header(b):
@@ -167,8 +171,8 @@ class BlockchainProcessor(Processor):
         }
 
     def get_header(self, height):
-        block_hash = self.bitcoind('getblockhash', (height,))
-        b = self.bitcoind('getblock', (block_hash,))
+        block_hash = self.lbrycrdd('getblockhash', (height,))
+        b = self.lbrycrdd('getblock', (block_hash,))
         return self.block2header(b)
 
     def init_headers(self, db_height):
@@ -269,7 +273,7 @@ class BlockchainProcessor(Processor):
 
     def get_mempool_transaction(self, txid):
         try:
-            raw_tx = self.bitcoind('getrawtransaction', (txid, 0))
+            raw_tx = self.lbrycrdd('getrawtransaction', (txid, 0))
         except:
             return None
 
@@ -339,8 +343,8 @@ class BlockchainProcessor(Processor):
         if cache_only:
             return -1
 
-        block_hash = self.bitcoind('getblockhash', (height,))
-        b = self.bitcoind('getblock', (block_hash,))
+        block_hash = self.lbrycrdd('getblockhash', (height,))
+        b = self.lbrycrdd('getblock', (block_hash,))
         tx_list = b.get('tx')
         tx_pos = tx_list.index(tx_hash)
 
@@ -554,7 +558,7 @@ class BlockchainProcessor(Processor):
 
         elif method == 'blockchain.transaction.broadcast':
             try:
-                txo = self.bitcoind('sendrawtransaction', params)
+                txo = self.lbrycrdd('sendrawtransaction', params)
                 print_log("sent tx:", txo)
                 result = txo
             except BaseException, e:
@@ -579,11 +583,11 @@ class BlockchainProcessor(Processor):
 
         elif method == 'blockchain.transaction.get':
             tx_hash = params[0]
-            result = self.bitcoind('getrawtransaction', (tx_hash, 0))
+            result = self.lbrycrdd('getrawtransaction', (tx_hash, 0))
 
         elif method == 'blockchain.estimatefee':
             num = int(params[0])
-            result = self.bitcoind('estimatefee', (num,))
+            result = self.lbrycrdd('estimatefee', (num,))
 
         elif method == 'blockchain.relayfee':
             result = self.relayfee
@@ -594,64 +598,39 @@ class BlockchainProcessor(Processor):
             if len(params) == 2:
                 block_hash = params[1]
                 args = args + (block_hash,)
-            proof = self.bitcoind('getnameproof', args)
+            proof = self.lbrycrdd('getnameproof', args)
             result = {'proof': proof}
             if 'txhash' in proof and 'nOut' in proof:
-                transaction = self.bitcoind('getrawtransaction', (proof['txhash'],))
+                transaction = self.lbrycrdd('getrawtransaction', (proof['txhash'],))
                 result['transaction'] = transaction
         elif method == 'blockchain.claimtrie.getclaimsintx':
             txid = params[0]
             args = (txid,)
-            result = self.bitcoind('getclaimsfortx', args)
+            result = self.lbrycrdd('getclaimsfortx', args)
         elif method == 'blockchain.block.get_block':
             blockhash = params[0]
             args = (blockhash,)
-            result = self.bitcoind('getblock', args)
+            result = self.lbrycrdd('getblock', args)
         elif method == 'blockchain.claimtrie.get':
-            result = self.bitcoind('getnametrie')
+            result = self.lbrycrdd('getnametrie')
         else:
             raise BaseException("unknown method:%s" % method)
 
         return result
 
-
     def get_block(self, block_hash):
-        block = self.bitcoind('getblock', (block_hash,))
-
-        rawtxreq = []
-        i = 0
-        for txid in block['tx']:
-            rawtxreq.append({
-                "method": "getrawtransaction",
-                "params": (txid,),
-                "id": i,
-            })
-            i += 1
-        postdata = dumps(rawtxreq)
+        block = self.lbrycrdd('getblock', (block_hash,))
 
         while True:
             try:
-                response = urllib.urlopen(self.bitcoind_url, postdata)
-                r = load(response)
-                response.close()
+                response = [self.lbrycrdd("getrawtransaction", (txid,)) for txid in block['tx']]
             except:
-                logger.error("bitcoind error (getfullblock)")
-                self.wait_on_bitcoind()
-                continue
-            try:
-                rawtxdata = []
-                for ir in r:
-                    assert ir['error'] is None, "Error: make sure you run bitcoind with txindex=1; use -reindex if needed."
-                    rawtxdata.append(ir['result'])
-            except BaseException as e:
-                logger.error(str(e))
-                self.wait_on_bitcoind()
+                logger.error("lbrycrdd error (getfullblock)")
+                self.wait_on_lbrycrdd()
                 continue
 
-            block['tx'] = rawtxdata
+            block['tx'] = response
             return block
-
-
 
     def catch_up(self, sync=True):
 
@@ -661,10 +640,10 @@ class BlockchainProcessor(Processor):
 
         while not self.shared.stopped():
             # are we done yet?
-            info = self.bitcoind('getinfo')
+            info = self.lbrycrdd('getinfo')
             self.relayfee = info.get('relayfee')
             self.bitcoind_height = info.get('blocks')
-            bitcoind_block_hash = self.bitcoind('getblockhash', (self.bitcoind_height,))
+            bitcoind_block_hash = self.lbrycrdd('getblockhash', (self.bitcoind_height,))
             if self.storage.last_hash == bitcoind_block_hash:
                 self.up_to_date = True
                 break
@@ -676,7 +655,7 @@ class BlockchainProcessor(Processor):
             # not done..
             self.up_to_date = False
             try:
-                next_block_hash = self.bitcoind('getblockhash', (self.storage.height + 1,))
+                next_block_hash = self.lbrycrdd('getblockhash', (self.storage.height + 1,))
             except BaseException, e:
                 revert = True
 
@@ -713,7 +692,7 @@ class BlockchainProcessor(Processor):
             # print time
             self.print_time(n)
 
-        self.header = self.block2header(self.bitcoind('getblock', (self.storage.last_hash,)))
+        self.header = self.block2header(self.lbrycrdd('getblock', (self.storage.last_hash,)))
         self.header['utxo_root'] = self.storage.get_root_hash().encode('hex')
 
         if self.shared.stopped(): 
@@ -723,7 +702,7 @@ class BlockchainProcessor(Processor):
 
     def memorypool_update(self):
         t0 = time.time()
-        mempool_hashes = set(self.bitcoind('getrawmempool'))
+        mempool_hashes = set(self.lbrycrdd('getrawmempool'))
         touched_addresses = set()
 
         # get new transactions
