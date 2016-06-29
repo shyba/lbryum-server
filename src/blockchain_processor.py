@@ -608,7 +608,7 @@ class BlockchainProcessor(Processor):
             args = (blockhash,)
             result = self.lbrycrdd('getblock', args)
         elif method == 'blockchain.claimtrie.get':
-            result = self.lbrycrdd('getnametrie')
+            result = self.lbrycrdd('getclaimtrie')
         else:
             raise BaseException("unknown method:%s" % method)
 
