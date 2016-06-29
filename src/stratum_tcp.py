@@ -6,6 +6,7 @@ import threading
 import time
 import sys
 
+from decimal import Decimal
 from processor import Session, Dispatcher
 from utils import print_log, logger
 
@@ -60,8 +61,13 @@ class TcpSession(Session):
         self._connection.close()
 
     def send_response(self, response):
+        def default_decimal(obj):
+            if isinstance(obj, Decimal):
+                return float(obj)
+            raise TypeError
+
         try:
-            msg = json.dumps(response) + '\n'
+            msg = json.dumps(response, default=default_decimal) + '\n'
         except BaseException as e:
             logger.error('send_response:' + str(e))
             return
