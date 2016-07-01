@@ -112,7 +112,7 @@ def create_config(filename=None):
 
     # set network parameters
     config.add_section('network')
-    config.set('network', 'type', 'bitcoin_main')
+    config.set('network', 'type', 'lbrycrd_main')
 
     # try to find the config file in the default paths
     if not filename:

@@ -18,8 +18,8 @@ TIMEOUT = 100
 
 import ssl
 
-class TcpSession(Session):
 
+class TcpSession(Session):
     def __init__(self, dispatcher, connection, address, use_ssl, ssl_certfile, ssl_keyfile):
         Session.__init__(self, dispatcher)
         self.use_ssl = use_ssl
@@ -68,6 +68,7 @@ class TcpSession(Session):
 
         try:
             msg = json.dumps(response, default=default_decimal) + '\n'
+            print_log("Response: %s" % msg)
         except BaseException as e:
             logger.error('send_response:' + str(e))
             return
@@ -76,6 +77,7 @@ class TcpSession(Session):
     def parse_message(self):
         message = self.message
         self.time = time.time()
+        print_log("Get message: %s" % str(message))
         raw_buffer = message.find('\n')
         if raw_buffer == -1:
             return False
@@ -84,11 +86,7 @@ class TcpSession(Session):
         return raw_command
 
 
-
-
-
 class TcpServer(threading.Thread):
-
     def __init__(self, dispatcher, host, port, use_ssl, ssl_certfile, ssl_keyfile):
         self.shared = dispatcher.shared
         self.dispatcher = dispatcher.request_dispatcher
@@ -103,10 +101,6 @@ class TcpServer(threading.Thread):
 
         self.fd_to_session = {}
         self.buffer_size = 4096
-
-
-
-
 
     def handle_command(self, raw_command, session):
         try:
@@ -125,8 +119,6 @@ class TcpServer(threading.Thread):
         else:
             #print_log("new request", command)
             self.dispatcher.push_request(session, command)
-
-
 
     def run(self):
 
@@ -321,6 +313,5 @@ class TcpServer(threading.Thread):
                 elif flag & select.POLLNVAL:
                     print_log('invalid request', session.address)
                     stop_session(fd)
-
 
         print_log('TCP thread terminating', self.shared.stopped())

@@ -30,21 +30,18 @@ global SCRIPT_ADDRESS
 PUBKEY_ADDRESS = 0
 SCRIPT_ADDRESS = 5
 
+
 def rev_hex(s):
     return s.decode('hex')[::-1].encode('hex')
-
 
 def int_to_hex(i, length=1):
     s = hex(i)[2:].rstrip('L')
     s = "0"*(2*length - len(s)) + s
     return rev_hex(s)
 
-
 Hash = lambda x: hashlib.sha256(hashlib.sha256(x).digest()).digest()
 
-
 hash_encode = lambda x: x[::-1].encode('hex')
-
 
 hash_decode = lambda x: x.decode('hex')[::-1]
 

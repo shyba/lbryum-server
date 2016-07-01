@@ -8,8 +8,8 @@ import sys
 from utils import random_string, timestr, print_log
 from utils import logger
 
-class Shared:
 
+class Shared:
     def __init__(self, config):
         self.lock = threading.Lock()
         self._stopped = False
@@ -39,7 +39,6 @@ class Shared:
 
 
 class Processor(threading.Thread):
-
     def __init__(self):
         threading.Thread.__init__(self)
         self.daemon = True
@@ -81,7 +80,6 @@ class Processor(threading.Thread):
 
 
 class Dispatcher:
-
     def __init__(self, config):
         self.shared = Shared(config)
         self.request_dispatcher = RequestDispatcher(self.shared)
@@ -98,7 +96,6 @@ class Dispatcher:
 
 
 class RequestDispatcher(threading.Thread):
-
     def __init__(self, shared):
         self.shared = shared
         threading.Thread.__init__(self)
@@ -200,7 +197,6 @@ class RequestDispatcher(threading.Thread):
 
 
 class Session:
-
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
         self.bp = self.dispatcher.processors['blockchain']
@@ -214,7 +210,6 @@ class Session:
         self.time = time.time()
         self.max_subscriptions = dispatcher.shared.config.getint('server', 'max_subscriptions')
         threading.Timer(2, self.info).start()
-
 
     def key(self):
         return self.address
@@ -237,15 +232,12 @@ class Session:
         self.dispatcher.remove_session(self)
         self.stop_subscriptions()
 
-
     def shutdown(self):
         pass
-
 
     def stopped(self):
         with self.lock:
             return self._stopped
-
 
     def subscribe_to_service(self, method, params):
         if self.stopped():
@@ -263,7 +255,6 @@ class Session:
                 self.subscriptions.append((method,params))
         return True
 
-
     def stop_subscriptions(self):
         with self.lock:
             s = self.subscriptions[:]
@@ -274,7 +265,6 @@ class Session:
 
 
 class ResponseDispatcher(threading.Thread):
-
     def __init__(self, shared, request_dispatcher):
         self.shared = shared
         self.request_dispatcher = request_dispatcher

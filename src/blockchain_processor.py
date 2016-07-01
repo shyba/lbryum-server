@@ -9,6 +9,7 @@ import time
 import threading
 import urllib
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
+from decimal import Decimal
 
 import deserialize
 from processor import Processor, print_log
@@ -23,12 +24,11 @@ BLOCKS_PER_CHUNK = 96 #720
 
 
 class BlockchainProcessor(Processor):
-
     def __init__(self, config, shared):
         Processor.__init__(self)
 
         # monitoring
-        self.avg_time = 0,0,0
+        self.avg_time = 0, 0, 0
         self.time_ref = time.time()
 
         self.shared = shared
@@ -77,11 +77,10 @@ class BlockchainProcessor(Processor):
         if config.getboolean('leveldb', 'profiler'):
             filename = os.path.join(config.get('leveldb', 'path'), 'profile')
             print_log('profiled thread', filename)
-            self.blockchain_thread = ProfiledThread(filename, target = self.do_catch_up)
+            self.blockchain_thread = ProfiledThread(filename, target=self.do_catch_up)
         else:
-            self.blockchain_thread = threading.Thread(target = self.do_catch_up)
+            self.blockchain_thread = threading.Thread(target=self.do_catch_up)
         self.blockchain_thread.start()
-
 
     def do_catch_up(self):
         self.header = self.block2header(self.lbrycrdd('getblock', (self.storage.last_hash,)))
@@ -98,7 +97,6 @@ class BlockchainProcessor(Processor):
                 print_log("lbrycrdd is responding")
                 self.shared.unpause()
             time.sleep(10)
-
 
     def set_time(self):
         self.time_ref = time.time()
@@ -136,8 +134,14 @@ class BlockchainProcessor(Processor):
             raise BaseException()
 
     def lbrycrdd(self, method, args=()):
+        def default_decimal(obj):
+            if isinstance(obj, Decimal):
+                return float(obj)
+            raise TypeError
+
         while True:
             try:
+                print_log("lbrycrd rpc: %s(%s)" % (method, json.dumps(args, default=default_decimal)))
                 r = AuthServiceProxy(self.lbrycrdd_url, method).__call__(*args)
                 return r
             except JSONRPCException as j:
@@ -271,6 +275,7 @@ class BlockchainProcessor(Processor):
         try:
             raw_tx = self.lbrycrdd('getrawtransaction', (txid, 0))
         except:
+            print_log("Error looking up txid: %s" % txid)
             return None
 
         vds = deserialize.BCDataStream()
@@ -280,7 +285,6 @@ class BlockchainProcessor(Processor):
         except:
             print_log("ERROR: cannot parse", txid)
             return None
-
 
     def get_history(self, addr, cache_only=False):
         with self.cache_lock:
@@ -391,8 +395,6 @@ class BlockchainProcessor(Processor):
             is_coinbase = False
         return tx_hashes, txdict
 
-
-
     def import_block(self, block, block_hash, block_height, revert=False):
 
         touched_addr = set()
@@ -435,7 +437,6 @@ class BlockchainProcessor(Processor):
         # return length for monitoring
         return len(tx_hashes)
 
-
     def add_request(self, session, request):
         # see if we can get if from cache. if not, add request to queue
         message_id = request.get('id')
@@ -449,7 +450,6 @@ class BlockchainProcessor(Processor):
             self.queue.put((session, request))
         else:
             self.push_response(session, {'id': message_id, 'result': result})
-
 
     def do_subscribe(self, method, params, session):
         with self.watch_lock:
@@ -468,7 +468,6 @@ class BlockchainProcessor(Processor):
                     self.watched_addresses[address] = [session]
                 elif session not in l:
                     l.append(session)
-
 
     def do_unsubscribe(self, method, params, session):
         with self.watch_lock:
@@ -490,7 +489,6 @@ class BlockchainProcessor(Processor):
                     self.shared.stop()
                 if l == []:
                     self.watched_addresses.pop(addr)
-
 
     def process(self, request, cache_only=False):
         
@@ -695,7 +693,6 @@ class BlockchainProcessor(Processor):
             print_log( "closing database" )
             self.storage.close()
 
-
     def memorypool_update(self):
         t0 = time.time()
         mempool_hashes = set(self.lbrycrdd('getrawmempool'))
@@ -795,7 +792,6 @@ class BlockchainProcessor(Processor):
         if t1-t0>1:
             print_log('mempool_update', t1-t0, len(self.mempool_hashes), len(self.mempool_hist))
 
-
     def invalidate_cache(self, address):
         with self.cache_lock:
             if address in self.history_cache:
@@ -808,14 +804,12 @@ class BlockchainProcessor(Processor):
         if sessions:
             # TODO: update cache here. if new value equals cached value, do not send notification
             self.address_queue.put((address,sessions))
-
     
     def close(self):
         self.blockchain_thread.join()
         print_log("Closing database...")
         self.storage.close()
         print_log("Database is closed")
-
 
     def main_iteration(self):
         if self.shared.stopped():
