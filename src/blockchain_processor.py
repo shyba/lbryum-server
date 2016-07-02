@@ -217,7 +217,7 @@ class BlockchainProcessor(Processor):
 
     @staticmethod
     def hash_header(header):
-        return rev_hex(PowHash(header_to_string(header).decode('hex')).encode('hex'))
+        return rev_hex(PoWHash(header_to_string(header).decode('hex')).encode('hex'))
 
     def read_header(self, block_height):
         if os.path.exists(self.headers_filename):
