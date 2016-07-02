@@ -17,7 +17,7 @@ from storage import Storage
 from utils import logger, hash_decode, hash_encode, Hash, header_from_string, header_to_string, ProfiledThread, rev_hex, int_to_hex
 
 
-HEADER_SIZE = 116
+HEADER_SIZE = 112
 
 
 BLOCKS_PER_CHUNK = 96 #720
@@ -166,7 +166,6 @@ class BlockchainProcessor(Processor):
             "merkle_root": b.get('merkleroot'),
             "claim_trie_root": b.get('nameclaimroot'),
             "timestamp": b.get('time'),
-            "mediantime": b.get('mediantime'),
             "bits": int(b.get('bits'), 16),
             "nonce": b.get('nonce'),
         }
