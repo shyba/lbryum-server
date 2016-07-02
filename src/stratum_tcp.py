@@ -68,9 +68,8 @@ class TcpSession(Session):
 
         try:
             msg = json.dumps(response, default=default_decimal) + '\n'
-            print_log("Response: %s" % msg)
         except BaseException as e:
-            logger.error('send_response:' + str(e))
+            logger.error('error send_response:' + str(e))
             return
         self.response_queue.put(msg)
 

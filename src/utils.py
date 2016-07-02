@@ -57,6 +57,7 @@ def header_to_string(res):
         + rev_hex(res.get('merkle_root')) \
         + rev_hex(res.get('claim_trie_root')) \
         + int_to_hex(int(res.get('timestamp')), 4) \
+        + int_to_hex(int(res.get('mediantime')), 4) \
         + int_to_hex(int(res.get('bits')), 4) \
         + int_to_hex(int(res.get('nonce')), 4)
 
@@ -72,8 +73,9 @@ def header_from_string(s):
         'merkle_root': hash_encode(s[36:68]),
         'claim_trie_root': hash_encode(s[68:100]),
         'timestamp': hex_to_int(s[100:104]),
-        'bits': hex_to_int(s[104:108]),
-        'nonce': hex_to_int(s[108:112]),
+        'mediantime': hex_to_int(s[104:108]),
+        'bits': hex_to_int(s[108:112]),
+        'nonce': hex_to_int(s[112:116]),
     }
 
 
