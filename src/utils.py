@@ -39,7 +39,33 @@ def int_to_hex(i, length=1):
     s = "0"*(2*length - len(s)) + s
     return rev_hex(s)
 
-Hash = lambda x: hashlib.sha256(hashlib.sha256(x).digest()).digest()
+def sha256(x):
+    return hashlib.sha256(x).digest()
+
+
+def sha512(x):
+    return hashlib.sha512(x).digest()
+
+
+def ripemd160(x):
+    h = hashlib.new('ripemd160')
+    h.update(x)
+    return h.digest()
+
+
+def Hash(x):
+    if type(x) is unicode: x=x.encode('utf-8')
+    return sha256(sha256(x))
+
+
+def PoWHash(x):
+    if type(x) is unicode: x=x.encode('utf-8')
+    r = sha512(Hash(x))
+    r1 = ripemd160(r[:len(r)/2])
+    r2 = ripemd160(r[len(r)/2:])
+    r3 = Hash(r1 + r2)
+    return r3
+
 
 hash_encode = lambda x: x[::-1].encode('hex')
 
