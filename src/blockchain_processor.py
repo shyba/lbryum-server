@@ -20,7 +20,7 @@ from utils import logger, hash_decode, hash_encode, Hash, header_from_string, he
 HEADER_SIZE = 112
 
 
-BLOCKS_PER_CHUNK = 96 #720
+BLOCKS_PER_CHUNK = 1
 
 
 class BlockchainProcessor(Processor):
