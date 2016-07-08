@@ -147,7 +147,13 @@ def hash_160_to_address(h160, addrtype = 0):
     """
     if h160 is None or len(h160) is not 20:
         return None
-    vh160 = chr(addrtype) + h160
+
+    if addrtype == 0:
+        c = chr(85)
+    elif addrtype == 5:
+        c = chr(122)
+
+    vh160 = c + h160
     h = Hash(vh160)
     addr = vh160 + h[0:4]
     return b58encode(addr)
