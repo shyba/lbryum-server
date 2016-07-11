@@ -2,8 +2,8 @@
 *.so
 *.o
 .gitignore
-electrum.conf
+lbryum.conf
 .idea
 build
 dist
-electrum_server.egg-info
+lbryum_server.egg-info

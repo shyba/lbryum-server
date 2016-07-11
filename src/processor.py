@@ -8,8 +8,8 @@ import sys
 from utils import random_string, timestr, print_log
 from utils import logger
 
-class Shared:
 
+class Shared:
     def __init__(self, config):
         self.lock = threading.Lock()
         self._stopped = False
@@ -39,7 +39,6 @@ class Shared:
 
 
 class Processor(threading.Thread):
-
     def __init__(self):
         threading.Thread.__init__(self)
         self.daemon = True
@@ -53,7 +52,7 @@ class Processor(threading.Thread):
         self.queue.put((session, request))
 
     def push_response(self, session, response):
-        #print "response", response
+        # print "response", response
         self.dispatcher.request_dispatcher.push_response(session, response)
 
     def close(self):
@@ -72,16 +71,15 @@ class Processor(threading.Thread):
                 result = self.process(request)
                 self.push_response(session, {'id': msg_id, 'result': result})
             except BaseException, e:
-                self.push_response(session, {'id': msg_id, 'error':str(e)})
+                self.push_response(session, {'id': msg_id, 'error': str(e)})
             except:
                 logger.error("process error", exc_info=True)
-                self.push_response(session, {'id': msg_id, 'error':'unknown error'})
+                self.push_response(session, {'id': msg_id, 'error': 'unknown error'})
 
         self.close()
 
 
 class Dispatcher:
-
     def __init__(self, config):
         self.shared = Shared(config)
         self.request_dispatcher = RequestDispatcher(self.shared)
@@ -98,7 +96,6 @@ class Dispatcher:
 
 
 class RequestDispatcher(threading.Thread):
-
     def __init__(self, shared):
         self.shared = shared
         threading.Thread.__init__(self)
@@ -109,7 +106,7 @@ class RequestDispatcher(threading.Thread):
         self.idlock = threading.Lock()
         self.sessions = {}
         self.processors = {}
-        self.lastgc = 0 
+        self.lastgc = 0
 
     def push_response(self, session, item):
         self.response_queue.put((session, item))
@@ -137,7 +134,7 @@ class RequestDispatcher(threading.Thread):
             try:
                 self.do_dispatch(session, request)
             except:
-                logger.error('dispatch',exc_info=True)
+                logger.error('dispatch', exc_info=True)
             self.collect_garbage()
 
         self.stop()
@@ -200,7 +197,6 @@ class RequestDispatcher(threading.Thread):
 
 
 class Session:
-
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
         self.bp = self.dispatcher.processors['blockchain']
@@ -214,7 +210,6 @@ class Session:
         self.time = time.time()
         self.max_subscriptions = dispatcher.shared.config.getint('server', 'max_subscriptions')
         threading.Timer(2, self.info).start()
-
 
     def key(self):
         return self.address
@@ -237,15 +232,12 @@ class Session:
         self.dispatcher.remove_session(self)
         self.stop_subscriptions()
 
-
     def shutdown(self):
         pass
-
 
     def stopped(self):
         with self.lock:
             return self._stopped
-
 
     def subscribe_to_service(self, method, params):
         if self.stopped():
@@ -260,9 +252,8 @@ class Session:
         self.bp.do_subscribe(method, params, self)
         with self.lock:
             if (method, params) not in self.subscriptions:
-                self.subscriptions.append((method,params))
+                self.subscriptions.append((method, params))
         return True
-
 
     def stop_subscriptions(self):
         with self.lock:
@@ -274,7 +265,6 @@ class Session:
 
 
 class ResponseDispatcher(threading.Thread):
-
     def __init__(self, shared, request_dispatcher):
         self.shared = shared
         self.request_dispatcher = request_dispatcher

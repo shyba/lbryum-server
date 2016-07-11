@@ -46,7 +46,6 @@ except ImportError:
     # For Windows
     fcntl = None
 
-
 from processor import Session
 from utils import random_string, print_log
 
@@ -77,7 +76,6 @@ def validate_request(request):
 
 
 class StratumJSONRPCDispatcher(SimpleXMLRPCServer.SimpleXMLRPCDispatcher):
-
     def __init__(self, encoding=None):
         # todo: use super
         SimpleXMLRPCServer.SimpleXMLRPCDispatcher.__init__(self, allow_none=True, encoding=encoding)
@@ -135,17 +133,17 @@ class StratumJSONRPCDispatcher(SimpleXMLRPCServer.SimpleXMLRPCDispatcher):
         while not q.empty():
             r = q.get()
             responses.append(r)
-        #print "poll: %d responses"%len(responses)
+        # print "poll: %d responses"%len(responses)
         return responses
 
 
 class StratumJSONRPCRequestHandler(SimpleXMLRPCServer.SimpleXMLRPCRequestHandler):
-
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Allow', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Headers', 'Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma, Accept-Language, Accept, Origin')
+        self.send_header('Access-Control-Allow-Headers',
+                         'Cache-Control, Content-Language, Content-Type, Expires, Last-Modified, Pragma, Accept-Language, Accept, Origin')
         self.send_header('Content-Length', '0')
         self.end_headers()
 
@@ -158,12 +156,12 @@ class StratumJSONRPCRequestHandler(SimpleXMLRPCServer.SimpleXMLRPCRequestHandler
             c = self.headers.get('cookie')
             if c:
                 if c[0:8] == 'SESSION=':
-                    #print "found cookie", c[8:]
+                    # print "found cookie", c[8:]
                     session_id = c[8:]
 
             if session_id is None:
                 session_id = self.server.create_session()
-                #print "setting cookie", session_id
+                # print "setting cookie", session_id
 
             data = json.dumps([])
             response = self.server._marshaled_dispatch(session_id, data)
@@ -194,7 +192,7 @@ class StratumJSONRPCRequestHandler(SimpleXMLRPCServer.SimpleXMLRPCRequestHandler
             self.report_404()
             return
         try:
-            max_chunk_size = 10*1024*1024
+            max_chunk_size = 10 * 1024 * 1024
             size_remaining = int(self.headers["content-length"])
             L = []
             while size_remaining:
@@ -207,12 +205,12 @@ class StratumJSONRPCRequestHandler(SimpleXMLRPCServer.SimpleXMLRPCRequestHandler
             c = self.headers.get('cookie')
             if c:
                 if c[0:8] == 'SESSION=':
-                    #print "found cookie", c[8:]
+                    # print "found cookie", c[8:]
                     session_id = c[8:]
 
             if session_id is None:
                 session_id = self.server.create_session()
-                #print "setting cookie", session_id
+                # print "setting cookie", session_id
 
             response = self.server._marshaled_dispatch(session_id, data)
             self.send_response(200)
@@ -264,12 +262,11 @@ class SSLTCPServer(SocketServer.TCPServer):
             self.server_activate()
 
     def shutdown_request(self, request):
-        #request.shutdown()
+        # request.shutdown()
         pass
 
 
 class StratumHTTPServer(SocketServer.TCPServer, StratumJSONRPCDispatcher):
-
     allow_reuse_address = True
 
     def __init__(self, addr, requestHandler=StratumJSONRPCRequestHandler,
@@ -300,7 +297,6 @@ class StratumHTTPServer(SocketServer.TCPServer, StratumJSONRPCDispatcher):
 
 
 class StratumHTTPSSLServer(SSLTCPServer, StratumJSONRPCDispatcher):
-
     allow_reuse_address = True
 
     def __init__(self, addr, certfile, keyfile,
@@ -333,7 +329,6 @@ class StratumHTTPSSLServer(SSLTCPServer, StratumJSONRPCDispatcher):
 
 
 class HttpSession(Session):
-
     def __init__(self, dispatcher, session_id):
         Session.__init__(self, dispatcher)
         self.pending_responses = Queue.Queue()
@@ -345,7 +340,6 @@ class HttpSession(Session):
     def send_response(self, response):
         raw_response = json.dumps(response)
         self.pending_responses.put(response)
-
 
 
 class HttpServer(threading.Thread):
@@ -367,11 +361,13 @@ class HttpServer(threading.Thread):
         if self.use_ssl:
             class StratumThreadedServer(ThreadingMixIn, StratumHTTPSSLServer):
                 pass
+
             self.server = StratumThreadedServer((self.host, self.port), self.certfile, self.keyfile)
             print_log("HTTPS server started.")
         else:
             class StratumThreadedServer(ThreadingMixIn, StratumHTTPServer):
                 pass
+
             self.server = StratumThreadedServer((self.host, self.port))
             print_log("HTTP server started.")
 

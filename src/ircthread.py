@@ -9,8 +9,8 @@ from version import VERSION
 
 out_msg = []
 
-class IrcThread(threading.Thread):
 
+class IrcThread(threading.Thread):
     def __init__(self, processor, config):
         threading.Thread.__init__(self)
         self.processor = processor
@@ -49,25 +49,25 @@ class IrcThread(threading.Thread):
             s += 'p' + self.pruning_limit + ' '
 
         def add_port(letter, number):
-            DEFAULT_PORTS = {'t':'50001', 's':'50002', 'h':'8081', 'g':'8082'}
+            DEFAULT_PORTS = {'t': '50001', 's': '50002', 'h': '8081', 'g': '8082'}
             if not number: return ''
             if DEFAULT_PORTS[letter] == number:
                 return letter + ' '
             else:
                 return letter + number + ' '
 
-        s += add_port('t',self.stratum_tcp_port)
-        s += add_port('h',self.stratum_http_port)
-        s += add_port('s',self.stratum_tcp_ssl_port)
-        s += add_port('g',self.stratum_http_ssl_port)
+        s += add_port('t', self.stratum_tcp_port)
+        s += add_port('h', self.stratum_http_port)
+        s += add_port('s', self.stratum_tcp_ssl_port)
+        s += add_port('g', self.stratum_http_ssl_port)
         return s
 
     def start(self, queue):
         self.queue = queue
         threading.Thread.start(self)
- 
+
     def on_connect(self, connection, event):
-        connection.join("#electrum")
+        connection.join("#lbryum")
 
     def on_join(self, connection, event):
         m = re.match("(E_.*)!", event.source)
@@ -78,7 +78,7 @@ class IrcThread(threading.Thread):
         m = re.match("(E_.*)!", event.source)
         if m:
             self.queue.put(('quit', [m.group(1)]))
-        
+
     def on_kick(self, connection, event):
         m = re.match("(E_.*)", event.arguments[0])
         if m:

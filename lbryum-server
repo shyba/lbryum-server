@@ -1,15 +1,15 @@
 #! /bin/bash
 
 
-electrum_config="/etc/electrum.conf"
-if [ ! -f $electrum_config ]; then
-    echo "$electrum_config does not exist"
+lbryum_config="/etc/lbryum.conf"
+if [ ! -f $lbryum_config ]; then
+    echo "$lbryum_config does not exist"
     echo "please run 'configure'"
     exit 1
 fi
 
-if ! hash run_electrum_server.py 2>/dev/null; then
-    echo "run_electrum_server.py is not installed"
+if ! hash run_lbryum_server.py 2>/dev/null; then
+    echo "run_lbryum_server.py is not installed"
     echo "Please run 'python setup.py install'"
     exit 1
 fi
@@ -19,7 +19,7 @@ fi
 function read_config()
 {
     text=$1
-    echo `grep -e ^$text $electrum_config |awk -F\= '{print $2}' | tail -n 1| tr -d ' '`
+    echo `grep -e ^$text $lbryum_config |awk -F\= '{print $2}' | tail -n 1| tr -d ' '`
 }
 
 # read path from config
@@ -29,11 +29,11 @@ user=$(read_config "username")
 
 # get PID of server
 if [ `id -u` = 0 ] ; then
-    if ! PID=`su $user -c "run_electrum_server.py getpid"`; then
+    if ! PID=`su $user -c "run_lbryum_server.py getpid"`; then
 	PID=""
     fi
 else
-    if ! PID=`run_electrum_server.py getpid`; then
+    if ! PID=`run_lbryum_server.py getpid`; then
 	PID=""
     fi
 fi;
@@ -46,7 +46,7 @@ case "$1" in
 	fi
 
 	if ! [ "$path" ]; then
-	    echo "Variable path not set in $electrum_config"
+	    echo "Variable path not set in $lbryum_config"
 	    exit
 	fi
 
@@ -57,8 +57,8 @@ case "$1" in
 	fi
 
 	echo "Starting server as daemon"
-	#cmd="ulimit -n 65536 ; nohup run_electrum_server.py > /dev/null &"
-	cmd="run_electrum_server.py > /dev/null &"
+	#cmd="ulimit -n 65536 ; nohup run_lbryum_server.py > /dev/null &"
+	cmd="run_lbryum_server.py > /dev/null &"
     if [ `id -u` = 0 ] ; then
             su $user -c "$cmd"
 	else
@@ -70,7 +70,7 @@ case "$1" in
 	    echo "Server not running"
 	    exit
 	fi
-        cmd="run_electrum_server.py stop"
+        cmd="run_lbryum_server.py stop"
 	if [ `id -u` = 0 ] ; then
             su $user -c "$cmd"
 	else
@@ -92,7 +92,7 @@ case "$1" in
 	    echo "Server not running"
 	    exit
 	fi
-        cmd="run_electrum_server.py $1"
+        cmd="run_lbryum_server.py $1"
 	if [ `id -u` = 0 ] ; then
             su $user -c "$cmd"
 	else
@@ -104,7 +104,7 @@ case "$1" in
 	$0 start
 	;;
     *)
-	echo "Usage: electrum-server {start|stop|restart|status|getinfo|peers|numpeers|sessions|numsessions}"
+	echo "Usage: lbryum-server {start|stop|restart|status|getinfo|peers|numpeers|sessions|numsessions}"
 	exit 1
 	;;
 esac
