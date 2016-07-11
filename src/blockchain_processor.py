@@ -14,12 +14,10 @@ from decimal import Decimal
 import deserialize
 from processor import Processor, print_log
 from storage import Storage
-from utils import logger, hash_decode, hash_encode, Hash, header_from_string, header_to_string, ProfiledThread, rev_hex, int_to_hex, PoWHash
-
+from utils import logger, hash_decode, hash_encode, Hash, header_from_string, header_to_string, ProfiledThread, rev_hex, \
+    int_to_hex, PoWHash
 
 HEADER_SIZE = 112
-
-
 BLOCKS_PER_CHUNK = 96
 
 
@@ -50,14 +48,14 @@ class BlockchainProcessor(Processor):
 
         self.mempool_values = {}
         self.mempool_addresses = {}
-        self.mempool_hist = {} # addr -> (txid, delta)
+        self.mempool_hist = {}  # addr -> (txid, delta)
         self.mempool_hashes = set()
         self.mempool_lock = threading.Lock()
 
         self.address_queue = Queue()
 
         try:
-            self.test_reorgs = config.getboolean('leveldb', 'test_reorgs')   # simulate random blockchain reorgs
+            self.test_reorgs = config.getboolean('leveldb', 'test_reorgs')  # simulate random blockchain reorgs
         except:
             self.test_reorgs = False
         self.storage = Storage(config, shared, self.test_reorgs)
@@ -105,24 +103,25 @@ class BlockchainProcessor(Processor):
         delta = time.time() - self.time_ref
         # leaky averages
         seconds_per_block, tx_per_second, n = self.avg_time
-        alpha = (1. + 0.01 * n)/(n+1)
-        seconds_per_block = (1-alpha) * seconds_per_block + alpha * delta
+        alpha = (1. + 0.01 * n) / (n + 1)
+        seconds_per_block = (1 - alpha) * seconds_per_block + alpha * delta
         alpha2 = alpha * delta / seconds_per_block
-        tx_per_second = (1-alpha2) * tx_per_second + alpha2 * num_tx / delta
-        self.avg_time = seconds_per_block, tx_per_second, n+1
-        if self.storage.height%100 == 0 \
-            or (self.storage.height%10 == 0 and self.storage.height >= 100000)\
-            or self.storage.height >= 200000:
-            msg = "block %d (%d %.2fs) %s" %(self.storage.height, num_tx, delta, self.storage.get_root_hash().encode('hex'))
+        tx_per_second = (1 - alpha2) * tx_per_second + alpha2 * num_tx / delta
+        self.avg_time = seconds_per_block, tx_per_second, n + 1
+        if self.storage.height % 100 == 0 \
+                or (self.storage.height % 10 == 0 and self.storage.height >= 100000) \
+                or self.storage.height >= 200000:
+            msg = "block %d (%d %.2fs) %s" % (
+                self.storage.height, num_tx, delta, self.storage.get_root_hash().encode('hex'))
             msg += " (%.2ftx/s, %.2fs/block)" % (tx_per_second, seconds_per_block)
             run_blocks = self.storage.height - self.start_catchup_height
             remaining_blocks = self.lbrycrdd_height - self.storage.height
-            if run_blocks>0 and remaining_blocks>0:
+            if run_blocks > 0 and remaining_blocks > 0:
                 remaining_minutes = remaining_blocks * seconds_per_block / 60
-                new_blocks = int(remaining_minutes / 10) # number of new blocks expected during catchup
+                new_blocks = int(remaining_minutes / 10)  # number of new blocks expected during catchup
                 blocks_to_process = remaining_blocks + new_blocks
                 minutes = blocks_to_process * seconds_per_block / 60
-                rt = "%.0fmin"%minutes if minutes < 300 else "%.1f hours"%(minutes/60)
+                rt = "%.0fmin" % minutes if minutes < 300 else "%.1f hours" % (minutes / 60)
                 msg += " (eta %s, %d blocks)" % (rt, remaining_blocks)
             print_log(msg)
 
@@ -179,7 +178,7 @@ class BlockchainProcessor(Processor):
         self.headers_filename = os.path.join(self.headers_path, 'blockchain_headers')
 
         if os.path.exists(self.headers_filename):
-            height = os.path.getsize(self.headers_filename)/HEADER_SIZE - 1   # the current height
+            height = os.path.getsize(self.headers_filename) / HEADER_SIZE - 1  # the current height
             if height > 0:
                 prev_hash = self.hash_header(self.read_header(height))
             else:
@@ -230,8 +229,8 @@ class BlockchainProcessor(Processor):
 
     def read_chunk(self, index):
         with open(self.headers_filename, 'rb') as f:
-            f.seek(index*BLOCKS_PER_CHUNK*HEADER_SIZE)
-            chunk = f.read(BLOCKS_PER_CHUNK*HEADER_SIZE)
+            f.seek(index * BLOCKS_PER_CHUNK * HEADER_SIZE)
+            chunk = f.read(BLOCKS_PER_CHUNK * HEADER_SIZE)
         return chunk.encode('hex')
 
     def write_header(self, header, sync=True):
@@ -239,11 +238,11 @@ class BlockchainProcessor(Processor):
             self.headers_offset = header.get('block_height')
 
         self.headers_data += header_to_string(header).decode('hex')
-        if sync or len(self.headers_data) > 40*100:
+        if sync or len(self.headers_data) > 40 * 100:
             self.flush_headers()
 
         with self.cache_lock:
-            chunk_index = header.get('block_height')/BLOCKS_PER_CHUNK
+            chunk_index = header.get('block_height') / BLOCKS_PER_CHUNK
             if self.chunk_cache.get(chunk_index):
                 self.chunk_cache.pop(chunk_index)
 
@@ -256,7 +255,7 @@ class BlockchainProcessor(Processor):
         if not self.headers_data:
             return
         with open(self.headers_filename, 'rb+') as f:
-            f.seek(self.headers_offset*HEADER_SIZE)
+            f.seek(self.headers_offset * HEADER_SIZE)
             f.write(self.headers_data)
         self.headers_data = ''
 
@@ -299,7 +298,7 @@ class BlockchainProcessor(Processor):
         # add memory pool
         with self.mempool_lock:
             for txid, delta in self.mempool_hist.get(addr, ()):
-                hist.append({'tx_hash':txid, 'height':0})
+                hist.append({'tx_hash': txid, 'height': 0})
 
         with self.cache_lock:
             if len(self.history_cache) > self.max_cache_size:
@@ -312,7 +311,7 @@ class BlockchainProcessor(Processor):
         hist = []
         with self.mempool_lock:
             for txid, delta in self.mempool_hist.get(addr, ()):
-                hist.append({'tx_hash':txid, 'height':0})
+                hist.append({'tx_hash': txid, 'height': 0})
         return hist
 
     def get_unconfirmed_value(self, addr):
@@ -321,7 +320,6 @@ class BlockchainProcessor(Processor):
             for txid, delta in self.mempool_hist.get(addr, ()):
                 v += delta
         return v
-
 
     def get_status(self, addr, cache_only=False):
         tx_points = self.get_history(addr, cache_only)
@@ -379,7 +377,7 @@ class BlockchainProcessor(Processor):
     def deserialize_block(block):
         txlist = block.get('tx')
         tx_hashes = []  # ordered txids
-        txdict = {}     # deserialized tx
+        txdict = {}  # deserialized tx
         is_coinbase = True
         for raw_tx in txlist:
             tx_hash = hash_encode(Hash(raw_tx.decode('hex')))
@@ -418,7 +416,7 @@ class BlockchainProcessor(Processor):
                 undo = undo_info.pop(txid)
                 self.storage.revert_transaction(txid, tx, block_height, touched_addr, undo)
 
-        if revert: 
+        if revert:
             assert undo_info == {}
 
         # add undo info
@@ -444,7 +442,7 @@ class BlockchainProcessor(Processor):
             result = self.process(request, cache_only=True)
         except BaseException as e:
             self.push_response(session, {'id': message_id, 'error': str(e)})
-            return 
+            return
 
         if result == -1:
             self.queue.put((session, request))
@@ -487,11 +485,11 @@ class BlockchainProcessor(Processor):
                 if session in l:
                     print_log("error rc!!")
                     self.shared.stop()
-                if l == []:
+                if not l:
                     self.watched_addresses.pop(addr)
 
     def process(self, request, cache_only=False):
-        
+
         message_id = request['id']
         method = request['method']
         params = request.get('params', ())
@@ -520,7 +518,7 @@ class BlockchainProcessor(Processor):
             address = str(params[0])
             confirmed = self.storage.get_balance(address)
             unconfirmed = self.get_unconfirmed_value(address)
-            result = { 'confirmed':confirmed, 'unconfirmed':unconfirmed }
+            result = {'confirmed': confirmed, 'unconfirmed': unconfirmed}
 
         elif method == 'blockchain.address.get_proof':
             address = str(params[0])
@@ -565,7 +563,7 @@ class BlockchainProcessor(Processor):
                         result = "Your client produced a transaction that is not accepted by the Bitcoin network any more. Please upgrade to Electrum 2.5.1 or newer\n"
                     else:
                         result = "The transaction was rejected by network rules.(" + message + ")\n" \
-                            "[" + params[0] + "]"
+                                                                                               "[" + params[0] + "]"
                 else:
                     result = error["message"]  # do send an error
                 print_log("error:", result)
@@ -644,7 +642,7 @@ class BlockchainProcessor(Processor):
 
             self.set_time()
 
-            revert = (random.randint(1, 100) == 1) if self.test_reorgs and self.storage.height>100 else False
+            revert = (random.randint(1, 100) == 1) if self.test_reorgs and self.storage.height > 100 else False
 
             # not done..
             self.up_to_date = False
@@ -659,7 +657,7 @@ class BlockchainProcessor(Processor):
 
                 prev_root_hash = self.storage.get_root_hash()
 
-                n = self.import_block(next_block, next_block_hash, self.storage.height+1)
+                n = self.import_block(next_block, next_block_hash, self.storage.height + 1)
                 self.storage.height = self.storage.height + 1
                 self.write_header(self.block2header(next_block), sync)
                 self.storage.last_hash = next_block_hash
@@ -668,7 +666,8 @@ class BlockchainProcessor(Processor):
 
                 # revert current block
                 block = self.get_block(self.storage.last_hash)
-                print_log("blockchain reorg", self.storage.height, block.get('previousblockhash'), self.storage.last_hash)
+                print_log("blockchain reorg", self.storage.height, block.get('previousblockhash'),
+                          self.storage.last_hash)
                 n = self.import_block(block, self.storage.last_hash, self.storage.height, revert=True)
                 self.pop_header()
                 self.flush_headers()
@@ -689,8 +688,8 @@ class BlockchainProcessor(Processor):
         self.header = self.block2header(self.lbrycrdd('getblock', (self.storage.last_hash,)))
         self.header['utxo_root'] = self.storage.get_root_hash().encode('hex')
 
-        if self.shared.stopped(): 
-            print_log( "closing database" )
+        if self.shared.stopped():
+            print_log("closing database")
             self.storage.close()
 
     def memorypool_update(self):
@@ -736,19 +735,19 @@ class BlockchainProcessor(Processor):
             for x in tx.get('inputs'):
                 mpv = self.mempool_values.get(x.get('prevout_hash'))
                 if mpv:
-                    addr, value = mpv[ x.get('prevout_n')]
+                    addr, value = mpv[x.get('prevout_n')]
                 else:
                     txi = (x.get('prevout_hash') + int_to_hex(x.get('prevout_n'), 4)).decode('hex')
                     try:
                         addr = self.storage.get_address(txi)
-                        value = self.storage.get_utxo_value(addr,txi)
+                        value = self.storage.get_utxo_value(addr, txi)
                     except:
                         print_log("utxo not in database; postponing mempool update")
                         return
 
                 if not addr:
                     continue
-                v = mpa.get(addr,0)
+                v = mpa.get(addr, 0)
                 v -= value
                 mpa[addr] = v
                 touched_addresses.add(addr)
@@ -789,8 +788,8 @@ class BlockchainProcessor(Processor):
             self.invalidate_cache(addr)
 
         t1 = time.time()
-        if t1-t0>1:
-            print_log('mempool_update', t1-t0, len(self.mempool_hashes), len(self.mempool_hist))
+        if t1 - t0 > 1:
+            print_log('mempool_update', t1 - t0, len(self.mempool_hashes), len(self.mempool_hist))
 
     def invalidate_cache(self, address):
         with self.cache_lock:
@@ -803,8 +802,8 @@ class BlockchainProcessor(Processor):
 
         if sessions:
             # TODO: update cache here. if new value equals cached value, do not send notification
-            self.address_queue.put((address,sessions))
-    
+            self.address_queue.put((address, sessions))
+
     def close(self):
         self.blockchain_thread.join()
         print_log("Closing database...")
@@ -824,19 +823,19 @@ class BlockchainProcessor(Processor):
             self.sent_height = self.storage.height
             for session in self.watch_blocks:
                 self.push_response(session, {
-                        'id': None,
-                        'method': 'blockchain.numblocks.subscribe',
-                        'params': (self.storage.height,),
-                        })
+                    'id': None,
+                    'method': 'blockchain.numblocks.subscribe',
+                    'params': (self.storage.height,),
+                })
 
         if self.sent_header != self.header:
             self.sent_header = self.header
             for session in self.watch_headers:
                 self.push_response(session, {
-                        'id': None,
-                        'method': 'blockchain.headers.subscribe',
-                        'params': (self.header,),
-                        })
+                    'id': None,
+                    'method': 'blockchain.headers.subscribe',
+                    'params': (self.header,),
+                })
 
         while True:
             try:
@@ -847,9 +846,7 @@ class BlockchainProcessor(Processor):
             status = self.get_status(addr)
             for session in sessions:
                 self.push_response(session, {
-                        'id': None,
-                        'method': 'blockchain.address.subscribe',
-                        'params': (addr, status),
-                        })
-
-
+                    'id': None,
+                    'method': 'blockchain.address.subscribe',
+                    'params': (addr, status),
+                })

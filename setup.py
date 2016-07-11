@@ -3,11 +3,11 @@ from setuptools import setup
 setup(
     name="lbryum-server",
     version="1.0",
-    scripts=['run_lbryum_server.py','lbryum-server'],
-    install_requires=['plyvel','jsonrpclib', 'irc>=11', 'python-bitcoinrpc==0.1'],
+    scripts=['run_lbryum_server.py', 'lbryum-server'],
+    install_requires=['plyvel', 'jsonrpclib', 'irc>=11', 'python-bitcoinrpc==0.1'],
     package_dir={
-        'lbryumserver':'src'
-        },
+        'lbryumserver': 'src'
+    },
     py_modules=[
         'lbryumserver.__init__',
         'lbryumserver.utils',
@@ -29,5 +29,3 @@ setup(
     url="https://github.com/spesmilo/lbryum-server/",
     long_description="""Server for the Electrum Lightweight LBRY Wallet"""
 )
-
-

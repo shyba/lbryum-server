@@ -10,7 +10,6 @@ from decimal import Decimal
 from processor import Session, Dispatcher
 from utils import print_log, logger
 
-
 READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
 READ_WRITE = READ_ONLY | select.POLLOUT
 WRITE_ONLY = select.POLLOUT
@@ -36,7 +35,7 @@ class TcpSession(Session):
         else:
             self._connection = connection
 
-        self.address = address[0] + ":%d"%address[1]
+        self.address = address[0] + ":%d" % address[1]
         self.name = "TCP " if not use_ssl else "SSL "
         self.timeout = 1000
         self.dispatcher.add_session(self)
@@ -117,7 +116,7 @@ class TcpServer(threading.Thread):
             # Return an error JSON in response.
             session.send_response({"error": "syntax error", "request": raw_command})
         else:
-            #print_log("new request", command)
+            # print_log("new request", command)
             self.dispatcher.push_request(session, command)
 
     def run(self):
@@ -143,9 +142,9 @@ class TcpServer(threading.Thread):
         if af == socket.AF_INET6:
             host = "[%s]" % host
         if sock is None:
-            print_log( "could not open " + ("SSL" if self.use_ssl else "TCP") + " socket on %s:%d" % (host, self.port))
+            print_log("could not open " + ("SSL" if self.use_ssl else "TCP") + " socket on %s:%d" % (host, self.port))
             return
-        print_log( ("SSL" if self.use_ssl else "TCP") + " server started on %s:%d" % (host, self.port))
+        print_log(("SSL" if self.use_ssl else "TCP") + " server started on %s:%d" % (host, self.port))
 
         sock_fd = sock.fileno()
         poller = select.poll()
@@ -184,7 +183,7 @@ class TcpServer(threading.Thread):
             if self.shared.paused():
                 sessions = self.fd_to_session.keys()
                 if sessions:
-                    logger.info("closing %d sessions"%len(sessions))
+                    logger.info("closing %d sessions" % len(sessions))
                 for fd in sessions:
                     stop_session(fd)
                 time.sleep(1)
@@ -230,8 +229,9 @@ class TcpServer(threading.Thread):
                     if flag & (select.POLLIN | select.POLLPRI):
                         try:
                             connection, address = sock.accept()
-                            session = TcpSession(self.dispatcher, connection, address, 
-                                                 use_ssl=self.use_ssl, ssl_certfile=self.ssl_certfile, ssl_keyfile=self.ssl_keyfile)
+                            session = TcpSession(self.dispatcher, connection, address,
+                                                 use_ssl=self.use_ssl, ssl_certfile=self.ssl_certfile,
+                                                 ssl_keyfile=self.ssl_keyfile)
                         except BaseException as e:
                             logger.error("cannot start TCP session" + str(e) + ' ' + repr(address))
                             connection.close()
@@ -248,7 +248,7 @@ class TcpServer(threading.Thread):
                 try:
                     check_do_handshake(session)
                 except BaseException as e:
-                    #logger.error('handshake failure:' + str(e) + ' ' + repr(session.address))
+                    # logger.error('handshake failure:' + str(e) + ' ' + repr(session.address))
                     stop_session(fd)
                     continue
                 # anti DOS
@@ -260,27 +260,27 @@ class TcpServer(threading.Thread):
                     try:
                         data = s.recv(self.buffer_size)
                     except ssl.SSLError as x:
-                        if x.args[0] == ssl.SSL_ERROR_WANT_READ: 
+                        if x.args[0] == ssl.SSL_ERROR_WANT_READ:
                             pass
-                        elif x.args[0] == ssl.SSL_ERROR_SSL: 
+                        elif x.args[0] == ssl.SSL_ERROR_SSL:
                             pass
                         else:
-                            logger.error('SSL recv error:'+ repr(x))
-                        continue 
+                            logger.error('SSL recv error:' + repr(x))
+                        continue
                     except socket.error as x:
                         if x.args[0] != 104:
-                            logger.error('recv error: ' + repr(x) +' %d'%fd)
+                            logger.error('recv error: ' + repr(x) + ' %d' % fd)
                         stop_session(fd)
                         continue
                     except ValueError as e:
-                        logger.error('recv error: ' + str(e) +' %d'%fd)
+                        logger.error('recv error: ' + str(e) + ' %d' % fd)
                         stop_session(fd)
                         continue
                     if data:
                         session.message += data
                         if len(data) == self.buffer_size:
                             redo.append((fd, flag))
-                        
+
                     if not data:
                         stop_session(fd)
                         continue

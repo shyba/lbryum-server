@@ -7,7 +7,7 @@ import string
 import struct
 import types
 
-from utils import hash_160_to_pubkey_address, hash_160_to_script_address, public_key_to_pubkey_address, hash_encode,\
+from utils import hash_160_to_pubkey_address, hash_160_to_script_address, public_key_to_pubkey_address, hash_encode, \
     hash_160
 
 
@@ -17,6 +17,7 @@ class SerializationError(Exception):
 
 class BCDataStream(object):
     """Workalike python implementation of Bitcoin's CDataStream class."""
+
     def __init__(self):
         self.input = None
         self.read_cursor = 0
@@ -25,13 +26,13 @@ class BCDataStream(object):
         self.input = None
         self.read_cursor = 0
 
-    def write(self, bytes):    # Initialize with string of bytes
+    def write(self, bytes):  # Initialize with string of bytes
         if self.input is None:
             self.input = bytes
         else:
             self.input += bytes
 
-    def map_file(self, file, start):    # Initialize with bytes from file
+    def map_file(self, file, start):  # Initialize with bytes from file
         self.input = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
         self.read_cursor = start
 
@@ -66,7 +67,7 @@ class BCDataStream(object):
 
     def read_bytes(self, length):
         try:
-            result = self.input[self.read_cursor:self.read_cursor+length]
+            result = self.input[self.read_cursor:self.read_cursor + length]
             self.read_cursor += length
             return result
         except IndexError:
@@ -132,13 +133,13 @@ class BCDataStream(object):
             raise SerializationError("attempt to write size < 0")
         elif size < 253:
             self.write(chr(size))
-        elif size < 2**16:
+        elif size < 2 ** 16:
             self.write('\xfd')
             self._write_num('<H', size)
-        elif size < 2**32:
+        elif size < 2 ** 32:
             self.write('\xfe')
             self._write_num('<I', size)
-        elif size < 2**64:
+        elif size < 2 ** 64:
             self.write('\xff')
             self._write_num('<Q', size)
 
@@ -207,7 +208,7 @@ def short_hex(bytes):
     t = bytes.encode('hex_codec')
     if len(t) < 11:
         return t
-    return t[0:4]+"..."+t[-4:]
+    return t[0:4] + "..." + t[-4:]
 
 
 def parse_TxIn(vds):
@@ -254,7 +255,8 @@ opcodes = Enumeration("Opcodes", [
     "OP_1", "OP_2", "OP_3", "OP_4", "OP_5", "OP_6", "OP_7",
     "OP_8", "OP_9", "OP_10", "OP_11", "OP_12", "OP_13", "OP_14", "OP_15", "OP_16",
     "OP_NOP", "OP_VER", "OP_IF", "OP_NOTIF", "OP_VERIF", "OP_VERNOTIF", "OP_ELSE", "OP_ENDIF", "OP_VERIFY",
-    "OP_RETURN", "OP_TOALTSTACK", "OP_FROMALTSTACK", "OP_2DROP", "OP_2DUP", "OP_3DUP", "OP_2OVER", "OP_2ROT", "OP_2SWAP",
+    "OP_RETURN", "OP_TOALTSTACK", "OP_FROMALTSTACK", "OP_2DROP", "OP_2DUP", "OP_3DUP", "OP_2OVER", "OP_2ROT",
+    "OP_2SWAP",
     "OP_IFDUP", "OP_DEPTH", "OP_DROP", "OP_DUP", "OP_NIP", "OP_OVER", "OP_PICK", "OP_ROLL", "OP_ROT",
     "OP_SWAP", "OP_TUCK", "OP_CAT", "OP_SUBSTR", "OP_LEFT", "OP_RIGHT", "OP_SIZE", "OP_INVERT", "OP_AND",
     "OP_OR", "OP_XOR", "OP_EQUAL", "OP_EQUALVERIFY", "OP_RESERVED1", "OP_RESERVED2", "OP_1ADD", "OP_1SUB", "OP_2MUL",
@@ -288,21 +290,21 @@ def script_GetOp(bytes):
             elif opcode == opcodes.OP_PUSHDATA4:
                 (nSize,) = struct.unpack_from('<I', bytes, i)
                 i += 4
-            if i+nSize > len(bytes):
-              vch = "_INVALID_"+bytes[i:]
-              i = len(bytes)
+            if i + nSize > len(bytes):
+                vch = "_INVALID_" + bytes[i:]
+                i = len(bytes)
             else:
-             vch = bytes[i:i+nSize]
-             i += nSize
+                vch = bytes[i:i + nSize]
+                i += nSize
 
         yield (opcode, vch, i)
 
 
 def script_GetOpName(opcode):
-  try:
-    return (opcodes.whatis(opcode)).replace("OP_", "")
-  except KeyError:
-    return "InvalidOp_"+str(opcode)
+    try:
+        return (opcodes.whatis(opcode)).replace("OP_", "")
+    except KeyError:
+        return "InvalidOp_" + str(opcode)
 
 
 def decode_script(bytes):
@@ -323,7 +325,7 @@ def match_decoded(decoded, to_match):
         return False
     for i in range(len(decoded)):
         if to_match[i] == opcodes.OP_PUSHDATA4 and decoded[i][0] <= opcodes.OP_PUSHDATA4:
-            continue    # Opcodes below OP_PUSHDATA4 all just push data onto stack, and are equivalent.
+            continue  # Opcodes below OP_PUSHDATA4 all just push data onto stack, and are equivalent.
         if to_match[i] != decoded[i][0]:
             return False
     return True
@@ -408,7 +410,7 @@ def decode_claim_script(decoded_script):
 
 def get_address_from_output_script(bytes):
     try:
-        decoded = [ x for x in script_GetOp(bytes) ]
+        decoded = [x for x in script_GetOp(bytes)]
     except:
         return None
     r = decode_claim_script(decoded)
@@ -434,12 +436,13 @@ def get_address_from_output_script(bytes):
         return hash_160_to_pubkey_address(decoded[2][1])
 
     # strange tx
-    match = [opcodes.OP_DUP, opcodes.OP_HASH160, opcodes.OP_PUSHDATA4, opcodes.OP_EQUALVERIFY, opcodes.OP_CHECKSIG, opcodes.OP_NOP]
+    match = [opcodes.OP_DUP, opcodes.OP_HASH160, opcodes.OP_PUSHDATA4, opcodes.OP_EQUALVERIFY, opcodes.OP_CHECKSIG,
+             opcodes.OP_NOP]
     if match_decoded(decoded, match):
         return hash_160_to_pubkey_address(decoded[2][1])
 
     # p2sh
-    match = [ opcodes.OP_HASH160, opcodes.OP_PUSHDATA4, opcodes.OP_EQUAL ]
+    match = [opcodes.OP_HASH160, opcodes.OP_PUSHDATA4, opcodes.OP_EQUAL]
     if match_decoded(decoded, match):
         addr = hash_160_to_script_address(decoded[1][1])
         return addr

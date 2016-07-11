@@ -4,7 +4,6 @@ import threading
 import time
 import Queue
 
-
 from processor import Processor
 from utils import Hash, print_log
 from version import VERSION
@@ -12,9 +11,7 @@ from utils import logger
 from ircthread import IrcThread
 
 
-
 class ServerProcessor(Processor):
-
     def __init__(self, config, shared):
         Processor.__init__(self)
         self.daemon = True
@@ -32,14 +29,13 @@ class ServerProcessor(Processor):
         else:
             self.irc = None
 
-
     def read_irc_results(self):
         while True:
             try:
                 event, params = self.irc_queue.get(timeout=1)
             except Queue.Empty:
                 continue
-            #logger.info(event + ' ' + repr(params))
+            # logger.info(event + ' ' + repr(params))
             if event == 'join':
                 nick, ip, host, ports = params
                 self.peers[nick] = (ip, host, ports)
@@ -48,10 +44,8 @@ class ServerProcessor(Processor):
                 if self.peers.get(nick):
                     self.peers.pop(nick)
 
-
     def get_peers(self):
         return self.peers.values()
-
 
     def process(self, request):
         method = request['method']
@@ -71,6 +65,6 @@ class ServerProcessor(Processor):
             result = VERSION
 
         else:
-            raise BaseException("unknown method: %s"%repr(method))
+            raise BaseException("unknown method: %s" % repr(method))
 
         return result
