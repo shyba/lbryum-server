@@ -82,27 +82,8 @@ if ! [ "$logfile" ]; then
     write_config "logfile" $default_logfile
 fi
 
-
-## remove directory if it exists and is empty
-#if [ -d $path ]; then
-#    rmdir $path --ignore-fail-on-non-empty
-#fi
-
-
-## download database
-#if [ ! -d $path ]; then
-#    echo "Database not found in $path."
-#    read -p "Do you want to download it from the Electrum foundry to $path ? " -n 1 -r
-#    echo
-#    if [[ $REPLY =~ ^[Yy]$ ]]; then
-#	mkdir -p $path
-#	wget -O - "http://foundry.electrum.org/leveldb-dump/electrum-fulltree-100-latest.tar.gz" | tar --extract --gunzip --strip-components 1 --directory $path --file -
-#    fi
-#fi
-
 # set owner
 chown -R $user $path
-
 
 # create log file
 logfile=$(read_config "logfile")
