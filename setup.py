@@ -4,7 +4,7 @@ setup(
     name="lbryum-server",
     version="1.0",
     scripts=['run_lbryum_server.py', 'lbryum-server'],
-    install_requires=['plyvel', 'jsonrpclib', 'irc>=11', 'python-bitcoinrpc==0.1'],
+    install_requires=['plyvel', 'jsonrpclib', 'irc>=11', 'python-bitcoinrpc==0.1', 'appdirs'],
     package_dir={
         'lbryumserver': 'src'
     },
