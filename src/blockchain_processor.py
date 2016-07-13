@@ -133,14 +133,8 @@ class BlockchainProcessor(Processor):
             raise BaseException()
 
     def lbrycrdd(self, method, args=()):
-        def default_decimal(obj):
-            if isinstance(obj, Decimal):
-                return float(obj)
-            raise TypeError
-
         while True:
             try:
-                print_log("lbrycrd rpc: %s(%s)" % (method, json.dumps(args, default=default_decimal)))
                 r = AuthServiceProxy(self.lbrycrdd_url, method).__call__(*args)
                 return r
             except JSONRPCException as j:

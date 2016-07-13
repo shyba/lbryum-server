@@ -67,7 +67,6 @@ class TcpSession(Session):
 
         try:
             msg = json.dumps(response, default=default_decimal) + '\n'
-            print_log("Response: %s" % msg)
         except BaseException as e:
             logger.error('send_response:' + str(e))
             return
@@ -76,7 +75,6 @@ class TcpSession(Session):
     def parse_message(self):
         message = self.message
         self.time = time.time()
-        print_log("Get message: %s" % str(message))
         raw_buffer = message.find('\n')
         if raw_buffer == -1:
             return False
