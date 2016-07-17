@@ -282,9 +282,9 @@ class BlockchainProcessor(Processor):
     def get_history(self, addr, cache_only=False):
         with self.cache_lock:
             hist = self.history_cache.get(addr)
-        if hist is not None and cache_only:
+        if hist is not None:
             return hist
-        elif cache_only:
+        if cache_only:
             return -1
 
         hist = self.storage.get_history(addr)
