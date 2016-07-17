@@ -75,6 +75,8 @@ class TcpSession(Session):
     def parse_message(self):
         message = self.message
         self.time = time.time()
+        # log ALL of the things
+        # print_log(self.address, message)
         raw_buffer = message.find('\n')
         if raw_buffer == -1:
             return False
@@ -150,7 +152,7 @@ class TcpServer(threading.Thread):
 
         def stop_session(fd):
             try:
-                # unregister before we close s 
+                # unregister before we close s
                 poller.unregister(fd)
             except BaseException as e:
                 logger.error('unregister error:' + str(e))
@@ -204,7 +206,7 @@ class TcpServer(threading.Thread):
                         session.time = now
                         self.handle_command(cmd, session)
 
-                    # Anti-DOS: Stop reading if the session does not read responses 
+                    # Anti-DOS: Stop reading if the session does not read responses
                     if session.response_queue.empty():
                         mode = READ_ONLY
                     elif session.response_queue.qsize() < 200:
