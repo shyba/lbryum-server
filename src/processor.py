@@ -223,6 +223,7 @@ class Session:
                       self.version)
 
     def stop(self):
+        print_log("Stop", self.address)
         with self.lock:
             if self._stopped:
                 return
@@ -233,7 +234,7 @@ class Session:
         self.stop_subscriptions()
 
     def shutdown(self):
-        pass
+        raise NotImplementedError
 
     def stopped(self):
         with self.lock:
