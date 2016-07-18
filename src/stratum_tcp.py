@@ -54,10 +54,11 @@ class TcpSession(Session):
     def shutdown(self):
         try:
             self._connection.shutdown(socket.SHUT_RDWR)
+            print_log("Closing connection to", self.address)
         except:
-            # print_log("problem shutting down", self.address)
-            pass
-        self._connection.close()
+            print_log("problem shutting down", self.address)
+        finally:
+            self._connection.close()
 
     def send_response(self, response):
         def default_decimal(obj):
@@ -158,7 +159,7 @@ class TcpServer(threading.Thread):
                 logger.error('unregister error:' + str(e))
             session = self.fd_to_session.pop(fd)
             # this will close the socket
-            session.shutdown()
+            session.stop()
 
         def check_do_handshake(session):
             if session.handshake:
