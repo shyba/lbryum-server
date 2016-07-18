@@ -54,7 +54,6 @@ class TcpSession(Session):
     def shutdown(self):
         try:
             self._connection.shutdown(socket.SHUT_RDWR)
-            print_log("Closing connection to", self.address)
         except:
             print_log("problem shutting down", self.address)
         finally:

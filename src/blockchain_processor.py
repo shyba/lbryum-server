@@ -149,6 +149,10 @@ class BlockchainProcessor(Processor):
                 elif j.error['code'] == -342:
                     print_log("missing HTTP response from server")
                     raise BaseException(j.error)
+                else:
+                    raise BaseException(j.error)
+            else:
+                raise BaseException("lbrycrdd request failed")
 
     @staticmethod
     def block2header(b):
@@ -437,6 +441,9 @@ class BlockchainProcessor(Processor):
         except BaseException as e:
             self.push_response(session, {'id': message_id, 'error': str(e)})
             return
+        except:
+            logger.error("process error", exc_info=True)
+            self.push_response(session, {'id': message_id, 'error': 'unknown error'})
 
         if result == -1:
             self.queue.put((session, request))
