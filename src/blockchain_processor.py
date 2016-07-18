@@ -150,8 +150,10 @@ class BlockchainProcessor(Processor):
                     print_log("missing HTTP response from server")
                     raise BaseException(j.error)
                 else:
+                    print_log("JSONRPCException: ", j.error, j.message)
                     raise BaseException(j.error)
             else:
+                print_log("Unknown error calling %s" % str(method), args)
                 raise BaseException("lbrycrdd request failed")
 
     @staticmethod
@@ -439,10 +441,12 @@ class BlockchainProcessor(Processor):
         try:
             result = self.process(request, cache_only=True)
         except BaseException as e:
+            print_log("Process error: ", str(e))
             self.push_response(session, {'id': message_id, 'error': str(e)})
             return
         except:
             logger.error("process error", exc_info=True)
+            print_log("error processing request")
             self.push_response(session, {'id': message_id, 'error': 'unknown error'})
 
         if result == -1:
