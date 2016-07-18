@@ -158,7 +158,7 @@ class TcpServer(threading.Thread):
                 logger.error('unregister error:' + str(e))
             session = self.fd_to_session.pop(fd)
             # this will close the socket
-            session.stop()
+            session.shutdown()
 
         def check_do_handshake(session):
             if session.handshake:
