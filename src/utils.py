@@ -75,7 +75,6 @@ hash_decode = lambda x: x.decode('hex')[::-1]
 
 
 def header_to_string(res):
-    logger.info("res: %s" % res)
     pbh = res.get('prev_block_hash')
     if pbh is None:
         pbh = '0' * 64
