@@ -608,6 +608,10 @@ class BlockchainProcessor(Processor):
             txid = params[0]
             args = (txid,)
             result = self.lbrycrdd('getclaimsfortx', args)
+        elif method == 'blockchain.claimtrie.getclaimsforname':
+            name = params[0]
+            args = (name,)
+            result = self.lbrycrdd('getclaimsforname', args)
         elif method == 'blockchain.block.get_block':
             blockhash = params[0]
             args = (blockhash,)
