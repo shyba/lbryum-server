@@ -604,6 +604,15 @@ class BlockchainProcessor(Processor):
             if 'txhash' in proof and 'nOut' in proof:
                 transaction = self.lbrycrdd('getrawtransaction', (proof['txhash'],))
                 result['transaction'] = transaction
+            claim_info = self.lbrycrdd('getclaimsforname', (name,))
+            supports = claim_info['claims'][0]['supports']
+            result['effective_amount'] = claim_info['nEffectiveAmount']
+            support_transactions = []
+            for support in supports:
+                raw_support = self.lbrycrdd('getrawtransaction', (support['txid'],))
+                support_transactions.append(raw_support)
+            result['supports'] = support_transactions
+
         elif method == 'blockchain.claimtrie.getclaimsintx':
             txid = params[0]
             args = (txid,)
