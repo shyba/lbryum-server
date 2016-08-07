@@ -610,7 +610,7 @@ class BlockchainProcessor(Processor):
             support_transactions = []
             for support in supports:
                 raw_support = self.lbrycrdd('getrawtransaction', (support['txid'],))
-                support_transactions.append(raw_support)
+                support_transactions.append([support['txid'], support['n'], raw_support])
             result['supports'] = support_transactions
 
         elif method == 'blockchain.claimtrie.getclaimsintx':
