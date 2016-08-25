@@ -1,8 +1,12 @@
 from setuptools import setup
+import imp
+
+version = imp.load_source('version', 'src/version.py')
+
 
 setup(
     name="lbryum-server",
-    version="1.0",
+    version=version.VERSION,
     scripts=['run_lbryum_server.py', 'lbryum-server'],
     install_requires=['plyvel', 'jsonrpclib', 'irc>=11', 'python-bitcoinrpc==0.1', 'appdirs'],
     package_dir={
