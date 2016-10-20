@@ -330,7 +330,6 @@ def match_decoded(decoded, to_match):
             return False
     return True
 
-
 class NameClaim(object):
     def __init__(self, name, value):
         self.name = name
@@ -338,10 +337,10 @@ class NameClaim(object):
 
 
 class ClaimUpdate(object):
-    def __init__(self, name, value, claim_id):
+    def __init__(self, name, claim_id, value):
         self.name = name
-        self.value = value
         self.claim_id = claim_id
+        self.value = value
 
 
 class ClaimSupport(object):
@@ -368,11 +367,11 @@ def decode_claim_script(decoded_script):
     value = None
     claim_id = None
     claim = None
-    if not (0 < decoded_script[op][0] <= opcodes.OP_PUSHDATA4):
+    if not (0 <= decoded_script[op][0] <= opcodes.OP_PUSHDATA4):
         return False
     name = decoded_script[op][1]
     op += 1
-    if not (0 < decoded_script[op][0] <= opcodes.OP_PUSHDATA4):
+    if not (0 <= decoded_script[op][0] <= opcodes.OP_PUSHDATA4):
         return False
     if decoded_script[0][0] in [
         opcodes.OP_SUPPORT_CLAIM,
@@ -390,18 +389,20 @@ def decode_claim_script(decoded_script):
     if decoded_script[op][0] != opcodes.OP_2DROP:
         return False
     op += 1
-    if decoded_script[op][0] != opcodes.OP_DROP:
+    if decoded_script[op][0] != opcodes.OP_DROP and decoded_script[0][0] == opcodes.OP_CLAIM_NAME:
+        return False
+    elif decoded_script[op][0] != opcodes.OP_2DROP and decoded_script[0][0] == opcodes.OP_UPDATE_CLAIM:
         return False
     op += 1
-    if decoded_script[0] == opcodes.OP_CLAIM_NAME:
+    if decoded_script[0][0] == opcodes.OP_CLAIM_NAME:
         if name is None or value is None:
             return False
         claim = NameClaim(name, value)
-    elif decoded_script[0] == opcodes.OP_UPDATE_CLAIM:
+    elif decoded_script[0][0] == opcodes.OP_UPDATE_CLAIM:
         if name is None or value is None or claim_id is None:
             return False
-        claim = ClaimUpdate(name, value, claim_id)
-    elif decoded_script[0] == opcodes.OP_SUPPORT_CLAIM:
+        claim = ClaimUpdate(name, claim_id, value)
+    elif decoded_script[0][0] == opcodes.OP_SUPPORT_CLAIM:
         if name is None or claim_id is None:
             return False
         claim = ClaimSupport(name, claim_id)
