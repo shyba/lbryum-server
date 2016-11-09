@@ -398,6 +398,15 @@ class BlockchainProcessor(Processor):
             is_coinbase = False
         return tx_hashes, txdict
 
+    # check if update is valid by seeing if its txid/nout is found in lbrycrdd's claim list
+    # for the name 
+    def _update_is_valid(self, update_claim, txid, nout):
+        claims = self.lbrycrdd('getclaimsforname', (update_claim.name,))
+        for claim in claims['claims']: 
+            if claim['txid'] == txid and claim['n'] == nout:
+                return True
+        return False
+
     def import_block(self, block, block_hash, block_height, revert=False):
 
         touched_addr = set()
@@ -420,6 +429,41 @@ class BlockchainProcessor(Processor):
             else:
                 undo = undo_info.pop(txid)
                 self.storage.revert_transaction(txid, tx, block_height, touched_addr, undo)
+            
+            for x in tx.get('outputs'):
+                script = x.get('raw_output_script').decode('hex')
+                nout = x.get('index')
+                decoded_script = [s for s in deserialize.script_GetOp(script)]
+                out = deserialize.decode_claim_script(decoded_script)    
+                if out is not False:
+                    claim, claim_script = out 
+                    if type(claim) == deserialize.ClaimUpdate:
+                        if not self._update_is_valid(claim, txid,nout):
+                            print_log('Found invalid claim update for {}'.format(claim.name))
+                            continue
+                        if revert:
+                            print_log('Reverting name update {}, {}:{}'.format(claim.name, txid, nout))
+                            undo_claim_info = self.storage.get_undo_claim_info(claim.claim_id)
+                            self.storage.revert_claim(claim, txid, nout, undo_claim_info)
+                        else:
+                            print_log('Importing name update for {}, {}:{}'.format(claim.name, txid, nout))
+                            undo_claim_info = self.storage.import_claim(claim, txid, nout)
+                            self.storage.write_undo_claim_info(block_height, self.lbrycrdd_height,
+                                                               claim.claim_id, undo_claim_info)
+                    elif type(claim) == deserialize.NameClaim:
+                        if revert:
+                            print_log('Reverting name claim {}, {}:{}'.format(claim.name, txid, nout))
+                            self.storage.revert_claim(claim, txid, nout)
+                        else:
+                            print_log('Importing name claim {}, {}:{}'.format(claim.name, txid, nout))
+                            self.storage.import_claim(claim, txid, nout)
+                       
+
+                    # we currently do not store support related information 
+                    elif type(claim) == deserialize.ClaimSupport:                     
+                        continue
+
+                        
 
         if revert:
             assert undo_info == {}
@@ -626,8 +670,24 @@ class BlockchainProcessor(Processor):
             result = self.lbrycrdd('getblock', args)
         elif method == 'blockchain.claimtrie.get':
             result = self.lbrycrdd('getclaimtrie')
+        elif method == 'blockchain.claimtrie.getclaimbyid':
+            claim_id = str(params[0]) 
+            print_log(claim_id)
+            txid_nout = self.storage.get_txid_nout_from_claim_id(claim_id) 
+            if txid_nout is not None:
+                txid,nout = txid_nout
+                print_log(txid)
+                args = (txid,)
+                claims = self.lbrycrdd('getclaimsfortx',args)
+                print_log("Claims: {}".format(claims))
+                for claim in claims:
+                    if claim['nOut'] == nout:
+                        result = claim
+            print_log("result:{}".format(result))
         else:
             raise BaseException("unknown method:%s" % method)
+    
+
 
         return result
 

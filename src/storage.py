@@ -5,8 +5,11 @@ import os
 import sys
 import threading
 
+
 from processor import print_log, logger
 from utils import bc_address_to_hash_160, hash_160_to_pubkey_address, hex_to_int, int_to_hex, Hash
+#from deserialize import decode_claim_script,NameClaim,ClaimUpdate,ClaimSupport
+import deserialize
 
 """
 Patricia tree for hashing unspents
@@ -16,7 +19,7 @@ Patricia tree for hashing unspents
 # increase this when database needs to be updated
 global GENESIS_HASH
 GENESIS_HASH = '9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
-DB_VERSION = 3
+DB_VERSION = 4
 KEYLENGTH = 56  # 20 + 32 + 4
 
 
@@ -178,6 +181,8 @@ class Storage(object):
             self.db_hist = DB(self.dbpath, 'hist', config.getint('leveldb', 'hist_cache'))
             self.db_addr = DB(self.dbpath, 'addr', config.getint('leveldb', 'addr_cache'))
             self.db_undo = DB(self.dbpath, 'undo', None)
+            self.db_claimid     = DB(self.dbpath, 'claimid', config.getint('leveldb', 'claimid_cache'))
+            self.db_undo_claim  = DB(self.dbpath, 'undo_claim', None)
         except:
             logger.error('db init', exc_info=True)
             self.shared.stop()
@@ -293,6 +298,16 @@ class Storage(object):
 
     def get_address(self, txi):
         return self.db_addr.get(txi)
+
+    def get_undo_claim_info(self, claim_id):
+        s = self.db_undo_claim.get(claim_id)
+        if s is None:
+            print_log('no undo info for {}'.format(claim_id))
+        return eval(s) 
+
+    def write_undo_claim_info(self,height, lbrycrdd_height, claim_id, undo_info):         
+        if height > lbrycrdd_height - 100 or self.test_reorgs:
+            self.db_undo_claim.put(claim_id, repr(undo_info))
 
     def get_undo_info(self, height):
         s = self.db_undo.get("undo_info_%d" % (height % 100))
@@ -525,11 +540,11 @@ class Storage(object):
         return self.root_hash if self.root_hash else ''
 
     def batch_write(self):
-        for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo]:
+        for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claimid]:
             db.write()
 
     def close(self):
-        for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo]:
+        for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claimid]:
             db.close()
 
     def save_height(self, block_hash, block_height):
@@ -594,6 +609,55 @@ class Storage(object):
         assert s[-80:-44] == txi
         s = s[:-80]
         self.db_hist.put(addr, s)
+ 
+    # get claim id in hex from txid in hex and nout int
+    def _get_claim_id(self, txid, nout):
+        claim_id = deserialize.claim_id_hash(deserialize.rev_hex(txid).decode('hex'),nout) 
+        claim_id = deserialize.claim_id_bytes_to_hex(claim_id) 
+        return claim_id  
+
+    def get_txid_nout_from_claim_id(self, claim_id):
+        txid_nout = self.db_claimid.get(claim_id) 
+        if txid_nout is None:
+            return None 
+        txid = txid_nout[0:64] 
+        nout = hex_to_int(txid_nout[64:72].decode('hex'))
+        return txid,nout
+
+    def import_claim(self, claim, txid, nout):
+        txid_nout = txid+int_to_hex(nout, 4)
+        undo_claim = {'prev_txid_nout':''}
+        if type(claim) == deserialize.NameClaim:
+            claim_id = self._get_claim_id(txid, nout)  
+            self.db_claimid.put(claim_id, txid_nout)
+            print_log('Inserting claim id {} with value {}'.format(claim_id, txid_nout))
+            
+        elif type(claim) == deserialize.ClaimUpdate:
+            claim_id = deserialize.claim_id_bytes_to_hex(claim.claim_id)
+            prev_txid_nout = self.db_claimid.get(claim_id) 
+            undo_claim['prev_txid_nout'] = prev_txid_nout 
+            self.db_claimid.delete(claim_id)
+            self.db_claimid.put(claim_id, txid_nout)
+            print_log('Updating {}, deleting {} and replacing with {}'.format(
+                        claim_id, prev_txid_nout, txid_nout))
+        return undo_claim
+
+    def revert_claim(self, claim, txid, nout, undo_claim={}): 
+        txid_nout = txid+int_to_hex(nout, 4)
+        if type(claim) == deserialize.NameClaim:
+            claim_id = _get_claim_id(txid, nout)  
+            self.db_claimid.delete(claim_id)
+            print_log('Reverting claim and deleting {}'.format(claim_id))
+        elif type(claim) == deserialize.ClaimUpdate:
+            prev_txid_nout = undo_claim.pop('prev_txid_nout')
+            # delete the update and put the original claim back in 
+            claim_id = deserialize.claim_id_bytes_to_hex(claim.claim_id)
+            self.db_clamid.delete(claim_id)
+            self.db_claimid.put(claim_id, prev_txid_nout)
+            print_log('Reverting update for claim {} to {}'.format(claim_id, prev_txid_nout))
+          
+        assert undo_claim == {}
+ 
 
     def import_transaction(self, txid, tx, block_height, touched_addr):
 
@@ -617,6 +681,9 @@ class Storage(object):
             if addr is None: continue
             self.add_to_history(addr, txid, x.get('index'), x.get('value'), block_height)
             touched_addr.add(addr)
+
+               
+           
 
         return undo
 

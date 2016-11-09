@@ -10,6 +10,15 @@ import types
 from utils import hash_160_to_pubkey_address, hash_160_to_script_address, public_key_to_pubkey_address, hash_encode, \
     hash_160
 
+def rev_hex(s):
+    return s.decode('hex')[::-1].encode('hex')
+
+# get the claim id hash from txid bytes and int n 
+def claim_id_hash(txid, n):
+    return hash_160(txid + struct.pack('>I',n))
+
+def claim_id_bytes_to_hex(claim_id_bytes):
+    return rev_hex(claim_id_bytes.encode('hex'))
 
 class SerializationError(Exception):
     """Thrown when there's a problem deserializing or serializing."""

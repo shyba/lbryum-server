@@ -110,6 +110,7 @@ def create_config(filename=None):
     config.set('leveldb', 'utxo_cache', str(64 * 1024 * 1024))
     config.set('leveldb', 'hist_cache', str(128 * 1024 * 1024))
     config.set('leveldb', 'addr_cache', str(16 * 1024 * 1024))
+    config.set('leveldb', 'claimid_cache', str(16 * 1024 *2024))
     config.set('leveldb', 'profiler', 'no')
 
     # set network parameters
