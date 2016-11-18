@@ -153,7 +153,9 @@ class BlockchainProcessor(Processor):
                     print_log("JSON value is not a string as expected")
                     raise BaseException(j.error)
                 else:
-                    print_log("JSONRPCException: ", j.error['message'])
+                    print_log(
+                        "While calling %s(%s): JSONRPCException: " % (method, args),
+                        j.error['message'])
                     raise BaseException(j.error)
             else:
                 print_log("Unknown error calling %s" % str(method), args)
