@@ -1,4 +1,6 @@
-# Main network and testnet3 definitions
+"""
+Main network and testnet3 definitions
+"""
 
 params = {
     'lbrycrd_main': {

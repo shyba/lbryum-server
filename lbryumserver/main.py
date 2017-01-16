@@ -21,13 +21,11 @@ import logging
 import socket
 import sys
 import time
-import threading
 import json
 import os
-import imp
-
-if os.path.dirname(os.path.realpath(__file__)) == os.getcwd():
-    imp.load_module('lbryumserver', *imp.find_module('src'))
+import xmlrpclib
+import signal
+import traceback
 
 from lbryumserver import storage, networks, utils
 from lbryumserver.processor import Dispatcher, print_log
@@ -35,6 +33,7 @@ from lbryumserver.server_processor import ServerProcessor
 from lbryumserver.blockchain_processor import BlockchainProcessor
 from lbryumserver.stratum_tcp import TcpServer
 from lbryumserver.stratum_http import HttpServer
+from SimpleXMLRPCServer import SimpleXMLRPCServer
 
 logging.basicConfig()
 
@@ -47,18 +46,34 @@ if os.getuid() == 0:
     sys.exit()
 
 
+def parse_lbrycrdd(line):
+    if line.startswith("rpcuser="):
+        return "lbrycrdd_user", line[8:].rstrip('\n')
+    elif line.startswith("rpcpassword="):
+        return "lbrycrdd_password", line[12:].rstrip('\n')
+    elif line.startswith("rpcport="):
+        return "lbrycrdd_port", line[8:].rstrip('\n')
+
+
+def load_lbrycrdd_connection_info(config, wallet_conf):
+    settings = {
+        "lbrycrdd_user": "rpcuser",
+        "lbrycrdd_password": "rpcpassword",
+        "lbrycrdd_port": '9245',
+        "lbrycrdd_host": "localhost"
+    }
+    with open(wallet_conf, "r") as conf:
+        conf_lines = conf.readlines()
+    settings.update(dict(parse_lbrycrdd(l) for l in conf_lines))
+    config.add_section('lbrycrdd')
+    for k, v in settings.iteritems():
+        config.set('lbrycrdd', k, v)
+
+
 def attempt_read_config(config, filename):
     try:
         with open(filename, 'r') as f:
             config.readfp(f)
-    except IOError:
-        pass
-
-
-def load_banner(config):
-    try:
-        with open(config.get('server', 'banner_file'), 'r') as f:
-            config.set('server', 'banner', f.read())
     except IOError:
         pass
 
@@ -78,12 +93,19 @@ def setup_network_params(config):
         storage.GENESIS_HASH = config.get('network', 'genesis_hash')
 
 
+if sys.platform == "darwin":
+    DEFAULT_DATA_DIR = os.path.join(os.path.expanduser("~/"), '.lbryumserver')
+    DEFAULT_LBRYUM_LOG_DIR = DEFAULT_DATA_DIR
+else:
+    DEFAULT_DATA_DIR = "/dev/shm"
+    DEFAULT_LBRYUM_LOG_DIR = "/var/log"
+
+
 def create_config(filename=None):
     config = ConfigParser.ConfigParser()
     # set some defaults, which will be overwritten by the config file
     config.add_section('server')
-    config.set('server', 'banner', 'Welcome to Electrum!')
-    config.set('server', 'banner_file', '/etc/lbryum.banner')
+    config.set('server', 'banner', 'Welcome to lbryum!')
     config.set('server', 'host', 'localhost')
     config.set('server', 'lbryum_rpc_port', '8000')
     config.set('server', 'report_host', '')
@@ -97,15 +119,13 @@ def create_config(filename=None):
     config.set('server', 'report_stratum_http_ssl_port', '')
     config.set('server', 'ssl_certfile', '')
     config.set('server', 'ssl_keyfile', '')
-    config.set('server', 'irc', 'no')
-    config.set('server', 'irc_nick', '')
     config.set('server', 'coin', '')
-    config.set('server', 'logfile', '/var/log/lbryum.log')
+    config.set('server', 'logfile', os.path.join(DEFAULT_LBRYUM_LOG_DIR, "lbryum.log"))
     config.set('server', 'donation_address', '')
     config.set('server', 'max_subscriptions', '10000')
 
     config.add_section('leveldb')
-    config.set('leveldb', 'path', '/dev/shm/lbryum_db')
+    config.set('leveldb', 'path', os.path.join(DEFAULT_DATA_DIR, 'lbryum_db'))
     config.set('leveldb', 'pruning_limit', '100')
     config.set('leveldb', 'utxo_cache', str(64 * 1024 * 1024))
     config.set('leveldb', 'hist_cache', str(128 * 1024 * 1024))
@@ -117,27 +137,41 @@ def create_config(filename=None):
     config.add_section('network')
     config.set('network', 'type', 'lbrycrd_main')
 
+    if sys.platform == "darwin":
+        default_lbrycrdd_dir = os.path.join(os.path.expanduser("~/"), "Library", "Application Support", "lbrycrd")
+    else:
+        default_lbrycrdd_dir = os.path.join(os.path.expanduser("~/"), ".lbrycrd")
+
+    lbrycrdd_conf = os.path.join(default_lbrycrdd_dir, "lbrycrd.conf")
+    if os.path.isfile(lbrycrdd_conf):
+        print_log("loading lbrycrdd info")
+        load_lbrycrdd_connection_info(config, lbrycrdd_conf)
+        found_lbrycrdd = True
+    else:
+        found_lbrycrdd = False
+
     # try to find the config file in the default paths
     if not filename:
-        for path in ('/etc/', ''):
-            filename = path + 'lbryum.conf'
-            if os.path.isfile(filename):
-                break
-
+        if sys.platform == "darwin":
+            filename = os.path.join(os.path.expanduser("~/"), 'lbryum.conf')
+        else:
+            for path in ('/etc/', ''):
+                filename = path + 'lbryum.conf'
+                if os.path.isfile(filename):
+                    break
     if not os.path.isfile(filename):
         print 'could not find lbryum configuration file "%s"' % filename
-        sys.exit(1)
+        if not found_lbrycrdd:
+            print "could not find lbrycrdd configutation file"
+            sys.exit(1)
 
     attempt_read_config(config, filename)
-
-    load_banner(config)
 
     return config
 
 
 def run_rpc_command(params, lbryum_rpc_port):
     cmd = params[0]
-    import xmlrpclib
     server = xmlrpclib.ServerProxy('http://localhost:%d' % lbryum_rpc_port)
     func = getattr(server, cmd)
     r = func(*params[1:])
@@ -155,11 +189,6 @@ def run_rpc_command(params, lbryum_rpc_port):
         print r
     else:
         print json.dumps(r, indent=4, sort_keys=True)
-
-
-def cmd_banner_update():
-    load_banner(dispatcher.shared.config)
-    return True
 
 
 def cmd_getinfo():
@@ -193,18 +222,8 @@ def cmd_numpeers():
     return len(server_proc.peers)
 
 
-hp = None
-
-
-def cmd_guppy():
-    from guppy import hpy
-    global hp
-    hp = hpy()
-
-
 def cmd_debug(s):
-    import traceback
-    import gc
+
     if s:
         try:
             result = str(eval(s))
@@ -251,14 +270,13 @@ def start_server(config):
         stratum_tcp_ssl_port = None
         stratum_http_ssl_port = None
 
-    print_log("Starting Electrum server on", host)
+    print_log("Starting LBRYum server on", host)
 
     # Create hub
     dispatcher = Dispatcher(config)
     shared = dispatcher.shared
 
     # handle termination signals
-    import signal
     def handler(signum=None, frame=None):
         print_log('Signal handler called with signal', signum)
         shared.stop()
@@ -298,10 +316,10 @@ def stop_server():
     shared.stop()
     server_proc.join()
     chain_proc.join()
-    print_log("Electrum Server stopped")
+    print_log("LBRYum Server stopped")
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--conf', metavar='path', default=None, help='specify a configuration file')
     parser.add_argument('command', nargs='*', default=[], help='send a command to the server')
@@ -330,8 +348,6 @@ if __name__ == '__main__':
 
     start_server(config)
 
-    from SimpleXMLRPCServer import SimpleXMLRPCServer
-
     server = SimpleXMLRPCServer(('localhost', lbryum_rpc_port), allow_none=True, logRequests=False)
     server.register_function(lambda: os.getpid(), 'getpid')
     server.register_function(shared.stop, 'stop')
@@ -341,8 +357,6 @@ if __name__ == '__main__':
     server.register_function(cmd_peers, 'peers')
     server.register_function(cmd_numpeers, 'numpeers')
     server.register_function(cmd_debug, 'debug')
-    server.register_function(cmd_guppy, 'guppy')
-    server.register_function(cmd_banner_update, 'banner_update')
     server.socket.settimeout(1)
 
     while not shared.stopped():
@@ -352,3 +366,7 @@ if __name__ == '__main__':
             continue
         except:
             stop_server()
+
+
+if __name__ == "__main__":
+    main()

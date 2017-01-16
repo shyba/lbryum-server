@@ -1,35 +1,24 @@
-from setuptools import setup
-import imp
+from setuptools import setup, find_packages
+import lbryumserver
+import os
+import sys
 
-version = imp.load_source('version', 'src/version.py')
+if sys.platform == "darwin":
+    os.environ['CFLAGS'] = "-mmacosx-version-min=10.7 -stdlib=libc++ -I/usr/local/Cellar/leveldb/1.19/include"
+    os.environ['LDFLAGS'] = "-L/usr/local/Cellar/leveldb/1.19/lib"
 
+base_dir = os.path.dirname(os.path.abspath(__file__))
 
 setup(
     name="lbryum-server",
-    version=version.VERSION,
-    scripts=['run_lbryum_server.py', 'lbryum-server'],
-    install_requires=['plyvel', 'jsonrpclib', 'irc>=11', 'python-bitcoinrpc==0.1', 'appdirs'],
-    package_dir={
-        'lbryumserver': 'src'
-    },
-    py_modules=[
-        'lbryumserver.__init__',
-        'lbryumserver.utils',
-        'lbryumserver.storage',
-        'lbryumserver.deserialize',
-        'lbryumserver.networks',
-        'lbryumserver.blockchain_processor',
-        'lbryumserver.server_processor',
-        'lbryumserver.processor',
-        'lbryumserver.version',
-        'lbryumserver.ircthread',
-        'lbryumserver.stratum_tcp',
-        'lbryumserver.stratum_http'
-    ],
+    packages=find_packages(base_dir),
+    version=lbryumserver.__version__,
+    entry_points={'console_scripts': ['lbryum-server = lbryumserver.main:main']},
+    install_requires=['plyvel', 'jsonrpclib', 'python-bitcoinrpc==0.1', 'appdirs'],
     description="LBRY Electrum Server",
     author="Thomas Voegtlin",
     author_email="thomasv1@gmx.de",
     license="GNU Affero GPLv3",
-    url="https://github.com/spesmilo/lbryum-server/",
+    url="https://github.com/lbryio/lbryum-server/",
     long_description="""Server for the Electrum Lightweight LBRY Wallet"""
 )

@@ -1,21 +1,17 @@
 ﻿import hashlib
-from json import dumps, load
-import json
 import os
 from Queue import Queue
 import random
 import sys
 import time
 import threading
-import urllib
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
-from decimal import Decimal
 
-import deserialize
-from processor import Processor, print_log
-from storage import Storage
-from utils import logger, hash_decode, hash_encode, Hash, header_from_string, header_to_string, ProfiledThread, rev_hex, \
-    int_to_hex, PoWHash
+from lbryumserver import deserialize
+from lbryumserver.processor import Processor, print_log
+from lbryumserver.storage import Storage
+from lbryumserver.utils import logger, hash_decode, hash_encode, Hash, header_from_string
+from lbryumserver.utils import header_to_string, ProfiledThread, rev_hex, int_to_hex, PoWHash
 
 HEADER_SIZE = 112
 BLOCKS_PER_CHUNK = 96
@@ -157,9 +153,6 @@ class BlockchainProcessor(Processor):
                         "While calling %s(%s): JSONRPCException: " % (method, args),
                         j.error['message'])
                     raise BaseException(j.error)
-            else:
-                print_log("Unknown error calling %s" % str(method), args)
-                raise BaseException("lbrycrdd request failed")
 
     @staticmethod
     def block2header(b):
@@ -399,10 +392,10 @@ class BlockchainProcessor(Processor):
         return tx_hashes, txdict
 
     # check if update is valid by seeing if its txid/nout is found in lbrycrdd's claim list
-    # for the name 
+    # for the name
     def _update_is_valid(self, update_claim, txid, nout):
         claims = self.lbrycrdd('getclaimsforname', (update_claim.name,))
-        for claim in claims['claims']: 
+        for claim in claims['claims']:
             if claim['txid'] == txid and claim['n'] == nout:
                 return True
         return False
@@ -429,14 +422,14 @@ class BlockchainProcessor(Processor):
             else:
                 undo = undo_info.pop(txid)
                 self.storage.revert_transaction(txid, tx, block_height, touched_addr, undo)
-            
+
             for x in tx.get('outputs'):
                 script = x.get('raw_output_script').decode('hex')
                 nout = x.get('index')
                 decoded_script = [s for s in deserialize.script_GetOp(script)]
-                out = deserialize.decode_claim_script(decoded_script)    
+                out = deserialize.decode_claim_script(decoded_script)
                 if out is not False:
-                    claim, claim_script = out 
+                    claim, claim_script = out
                     if type(claim) == deserialize.ClaimUpdate:
                         if not self._update_is_valid(claim, txid,nout):
                             print_log('Found invalid claim update for {}'.format(claim.name))
@@ -457,13 +450,13 @@ class BlockchainProcessor(Processor):
                         else:
                             print_log('Importing name claim {}, {}:{}'.format(claim.name, txid, nout))
                             self.storage.import_claim(claim, txid, nout)
-                       
 
-                    # we currently do not store support related information 
-                    elif type(claim) == deserialize.ClaimSupport:                     
+
+                    # we currently do not store support related information
+                    elif type(claim) == deserialize.ClaimSupport:
                         continue
 
-                        
+
 
         if revert:
             assert undo_info == {}
@@ -614,11 +607,7 @@ class BlockchainProcessor(Processor):
                     # If we return anything that's not the transaction hash,
                     #  it's considered an error message
                     message = error["message"]
-                    if "non-mandatory-script-verify-flag" in message:
-                        result = "Your client produced a transaction that is not accepted by the Bitcoin network any more. Please upgrade to Electrum 2.5.1 or newer\n"
-                    else:
-                        result = "The transaction was rejected by network rules.(" + message + ")\n" \
-                                                                                               "[" + params[0] + "]"
+                    result = "The transaction was rejected by network rules.(%s)\n[%s]" % (message, params[0])
                 else:
                     result = error["message"]  # do send an error
                 print_log("error:", result)
@@ -660,20 +649,24 @@ class BlockchainProcessor(Processor):
             txid = params[0]
             args = (txid,)
             result = self.lbrycrdd('getclaimsfortx', args)
+
         elif method == 'blockchain.claimtrie.getclaimsforname':
             name = params[0]
             args = (name,)
             result = self.lbrycrdd('getclaimsforname', args)
+
         elif method == 'blockchain.block.get_block':
             blockhash = params[0]
             args = (blockhash,)
             result = self.lbrycrdd('getblock', args)
+
         elif method == 'blockchain.claimtrie.get':
             result = self.lbrycrdd('getclaimtrie')
+
         elif method == 'blockchain.claimtrie.getclaimbyid':
-            claim_id = str(params[0]) 
+            claim_id = str(params[0])
             print_log(claim_id)
-            txid_nout = self.storage.get_txid_nout_from_claim_id(claim_id) 
+            txid_nout = self.storage.get_txid_nout_from_claim_id(claim_id)
             if txid_nout is not None:
                 txid,nout = txid_nout
                 print_log(txid)
@@ -686,7 +679,7 @@ class BlockchainProcessor(Processor):
             print_log("result:{}".format(result))
         else:
             raise BaseException("unknown method:%s" % method)
-    
+
 
 
         return result

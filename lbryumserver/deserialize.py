@@ -1,14 +1,11 @@
-# this code comes from ABE. it can probably be simplified
-#
-#
-
 import mmap
-import string
 import struct
 import types
 
-from utils import hash_160_to_pubkey_address, hash_160_to_script_address, public_key_to_pubkey_address, hash_encode, \
-    hash_160
+from lbryumserver.utils import hash_160_to_pubkey_address, hash_160_to_script_address, public_key_to_pubkey_address
+from lbryumserver.utils import hash_encode, hash_160
+
+# this code comes from ABE. it can probably be simplified
 
 def rev_hex(s):
     return s.decode('hex')[::-1].encode('hex')

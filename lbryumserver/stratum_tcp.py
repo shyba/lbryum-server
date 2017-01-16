@@ -4,18 +4,19 @@ import socket
 import select
 import threading
 import time
-import sys
-
+try:
+    import ssl
+    SSL_IMPORTED = True
+except ImportError:
+    SSL_IMPORTED = False
 from decimal import Decimal
-from processor import Session, Dispatcher
-from utils import print_log, logger
+from lbryumserver.processor import Session
+from lbryumserver.utils import print_log, logger
 
 READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
 READ_WRITE = READ_ONLY | select.POLLOUT
 WRITE_ONLY = select.POLLOUT
 TIMEOUT = 100
-
-import ssl
 
 
 class TcpSession(Session):
@@ -23,8 +24,10 @@ class TcpSession(Session):
         Session.__init__(self, dispatcher)
         self.use_ssl = use_ssl
         self.raw_connection = connection
-        if use_ssl:
-            import ssl
+        if use_ssl and not SSL_IMPORTED:
+            logger.warning("SSL is not available")
+            self._connection = connection
+        elif use_ssl and SSL_IMPORTED:
             self._connection = ssl.wrap_socket(
                 connection,
                 server_side=True,
@@ -54,8 +57,9 @@ class TcpSession(Session):
     def shutdown(self):
         try:
             self._connection.shutdown(socket.SHUT_RDWR)
-        except:
+        except Exception as err:
             print_log("problem shutting down", self.address)
+            print_log(err)
         finally:
             self._connection.close()
 

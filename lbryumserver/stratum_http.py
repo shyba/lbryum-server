@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright(C) 2012 thomasv@gitorious
 
 # This program is free software: you can redistribute it and/or modify
@@ -14,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public
 # License along with this program.  If not, see
 # <http://www.gnu.org/licenses/agpl.html>.
+
 """
 sessions are identified with cookies
  - each session has a buffer of responses to requests
@@ -23,6 +23,7 @@ from the processor point of view:
  - the user only defines process() ; the rest is session management.  thus sessions should not belong to processor
 
 """
+
 import json
 import logging
 import os

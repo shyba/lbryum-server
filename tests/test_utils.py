@@ -1,7 +1,7 @@
 __author__ = 'erasmospunk'
 
 import unittest
-from utils import hash_160_to_address, bc_address_to_hash_160
+from lbryumserver.utils import hash_160_to_address, bc_address_to_hash_160
 
 
 class UtilTest(unittest.TestCase):
