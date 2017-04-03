@@ -48,8 +48,13 @@ __b58base = len(__b58chars)
 
 global PUBKEY_ADDRESS
 global SCRIPT_ADDRESS
+global PUBKEY_ADDRESS_PREFIX
+global SCRIPT_ADDRESS_PREFIX
+
 PUBKEY_ADDRESS = 0
 SCRIPT_ADDRESS = 5
+PUBKEY_ADDRESS_PREFIX = 85
+SCRIPT_ADDRESS_PREFIX = 122
 
 
 def rev_hex(s):
@@ -169,9 +174,9 @@ def hash_160_to_address(h160, addrtype=0):
         return None
 
     if addrtype == 0:
-        c = chr(85)
+        c = chr(PUBKEY_ADDRESS_PREFIX)
     elif addrtype == 5:
-        c = chr(122)
+        c = chr(SCRIPT_ADDRESS_PREFIX)
 
     vh160 = c + h160
     h = Hash(vh160)

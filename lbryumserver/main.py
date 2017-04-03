@@ -46,13 +46,14 @@ if os.getuid() == 0:
     sys.exit()
 
 
-def parse_lbrycrdd(line):
-    if line.startswith("rpcuser="):
-        return "lbrycrdd_user", line[8:].rstrip('\n')
-    elif line.startswith("rpcpassword="):
-        return "lbrycrdd_password", line[12:].rstrip('\n')
-    elif line.startswith("rpcport="):
-        return "lbrycrdd_port", line[8:].rstrip('\n')
+def parse_lbrycrdd(conf_lines):
+    for line in conf_lines:
+        if line.startswith("rpcuser="):
+            yield "lbrycrdd_user", line[8:].rstrip('\n')
+        elif line.startswith("rpcpassword="):
+            yield "lbrycrdd_password", line[12:].rstrip('\n')
+        elif line.startswith("rpcport="):
+            yield "lbrycrdd_port", line[8:].rstrip('\n')
 
 
 def load_lbrycrdd_connection_info(config, wallet_conf):
@@ -64,7 +65,10 @@ def load_lbrycrdd_connection_info(config, wallet_conf):
     }
     with open(wallet_conf, "r") as conf:
         conf_lines = conf.readlines()
-    settings.update(dict(parse_lbrycrdd(l) for l in conf_lines))
+    lbrycrdd_settings = {}
+    for k, v in parse_lbrycrdd(conf_lines):
+        lbrycrdd_settings.update({k: v})
+    settings.update(lbrycrdd_settings)
     config.add_section('lbrycrdd')
     for k, v in settings.iteritems():
         config.set('lbrycrdd', k, v)
@@ -78,27 +82,23 @@ def attempt_read_config(config, filename):
         pass
 
 
-def setup_network_params(config):
+def setup_network_settings(config):
     type = config.get('network', 'type')
     params = networks.params.get(type)
     utils.PUBKEY_ADDRESS = int(params.get('pubkey_address'))
     utils.SCRIPT_ADDRESS = int(params.get('script_address'))
+    utils.PUBKEY_ADDRESS_PREFIX = int(params.get('pubkey_address_prefix'))
+    utils.SCRIPT_ADDRESS_PREFIX = int(params.get('script_address_prefix'))
     storage.GENESIS_HASH = params.get('genesis_hash')
 
-    if config.has_option('network', 'pubkey_address'):
-        utils.PUBKEY_ADDRESS = config.getint('network', 'pubkey_address')
-    if config.has_option('network', 'script_address'):
-        utils.SCRIPT_ADDRESS = config.getint('network', 'script_address')
-    if config.has_option('network', 'genesis_hash'):
-        storage.GENESIS_HASH = config.get('network', 'genesis_hash')
 
+DEFAULT_DATA_DIR = os.path.join(os.path.expanduser("~/"), '.lbryumserver')
+DEFAULT_LBRYUM_LOG_DIR = DEFAULT_DATA_DIR
 
-if sys.platform == "darwin":
-    DEFAULT_DATA_DIR = os.path.join(os.path.expanduser("~/"), '.lbryumserver')
-    DEFAULT_LBRYUM_LOG_DIR = DEFAULT_DATA_DIR
-else:
-    DEFAULT_DATA_DIR = "/dev/shm"
-    DEFAULT_LBRYUM_LOG_DIR = "/var/log"
+if not os.path.isdir(DEFAULT_DATA_DIR):
+    os.mkdir(DEFAULT_DATA_DIR)
+if not os.path.isdir(DEFAULT_LBRYUM_LOG_DIR):
+    os.mkdir(DEFAULT_LBRYUM_LOG_DIR)
 
 
 def create_config(filename=None):
@@ -130,7 +130,10 @@ def create_config(filename=None):
     config.set('leveldb', 'utxo_cache', str(64 * 1024 * 1024))
     config.set('leveldb', 'hist_cache', str(128 * 1024 * 1024))
     config.set('leveldb', 'addr_cache', str(16 * 1024 * 1024))
-    config.set('leveldb', 'claimid_cache', str(16 * 1024 *2024))
+    config.set('leveldb', 'claimid_cache', str(16 * 1024 * 1024 * 8))
+
+    config.set('leveldb', 'claim_value_cache', str(1024 * 1024 * 1024))
+
     config.set('leveldb', 'profiler', 'no')
 
     # set network parameters
@@ -148,6 +151,7 @@ def create_config(filename=None):
         load_lbrycrdd_connection_info(config, lbrycrdd_conf)
         found_lbrycrdd = True
     else:
+        print_log("no config for lbrycrdd found (%s)" % lbrycrdd_conf)
         found_lbrycrdd = False
 
     # try to find the config file in the default paths
@@ -159,6 +163,7 @@ def create_config(filename=None):
                 filename = path + 'lbryum.conf'
                 if os.path.isfile(filename):
                     break
+
     if not os.path.isfile(filename):
         print 'could not find lbryum configuration file "%s"' % filename
         if not found_lbrycrdd:
@@ -264,7 +269,7 @@ def start_server(config):
     ssl_certfile = config.get('server', 'ssl_certfile')
     ssl_keyfile = config.get('server', 'ssl_keyfile')
 
-    setup_network_params(config)
+    setup_network_settings(config)
 
     if ssl_certfile is '' or ssl_keyfile is '':
         stratum_tcp_ssl_port = None
