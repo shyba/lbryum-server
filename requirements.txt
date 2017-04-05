@@ -1,5 +1,5 @@
 plyvel
 jsonrpclib
-irc>=11
 python-bitcoinrpc==0.1
 appdirs
+lbryschema==0.0.1

@@ -1,21 +1,19 @@
 ﻿import hashlib
-from json import dumps, load
-import json
 import os
 from Queue import Queue
 import random
 import sys
 import time
 import threading
-import urllib
-from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
-from decimal import Decimal
+import traceback
 
-import deserialize
-from processor import Processor, print_log
-from storage import Storage
-from utils import logger, hash_decode, hash_encode, Hash, header_from_string, header_to_string, ProfiledThread, rev_hex, \
-    int_to_hex, PoWHash
+from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
+
+from lbryumserver import deserialize
+from lbryumserver.processor import Processor, print_log
+from lbryumserver.storage import Storage
+from lbryumserver.utils import logger, hash_decode, hash_encode, Hash, header_from_string
+from lbryumserver.utils import header_to_string, ProfiledThread, rev_hex, int_to_hex, PoWHash
 
 HEADER_SIZE = 112
 BLOCKS_PER_CHUNK = 96
@@ -139,6 +137,7 @@ class BlockchainProcessor(Processor):
                 return r
             except JSONRPCException as j:
                 r = "no response"
+                print_log("Failed: %s%s" % (method, args))
                 if j.error['code'] == -28:
                     print_log("lbrycrdd still warming up...")
                     self.wait_on_lbrycrdd()
@@ -150,16 +149,13 @@ class BlockchainProcessor(Processor):
                     print_log("missing HTTP response from server")
                     raise BaseException(j.error)
                 elif j.error['code'] == -1:
-                    print_log("JSON value is not a string as expected")
+                    print_log("JSON value is not a string as expected: %s" % j)
                     raise BaseException(j.error)
                 else:
                     print_log(
                         "While calling %s(%s): JSONRPCException: " % (method, args),
                         j.error['message'])
                     raise BaseException(j.error)
-            else:
-                print_log("Unknown error calling %s" % str(method), args)
-                raise BaseException("lbrycrdd request failed")
 
     @staticmethod
     def block2header(b):
@@ -398,6 +394,32 @@ class BlockchainProcessor(Processor):
             is_coinbase = False
         return tx_hashes, txdict
 
+    def import_claim_transaction(self, claim, script, txid, nout, block_height, revert):
+        if type(claim) in [deserialize.NameClaim, deserialize.ClaimUpdate]:
+            if type(claim) == deserialize.ClaimUpdate:
+                is_claim_update = True
+            else:
+                is_claim_update = False
+            claim_address = deserialize.get_address_from_output_script(script)
+            if is_claim_update:
+                claim_id = claim.claim_id.encode('hex')
+            else:
+                claim_id = self.storage._get_claim_id(txid, nout)
+            if is_claim_update and revert:
+                undo_claim_info = self.storage.get_undo_claim_info(claim.claim_id)
+                self.storage.revert_claim(claim, txid, nout, undo_claim_info)
+            elif revert:
+                self.storage.revert_claim(claim, txid, nout)
+            else:
+                undo_claim_info = self.storage.import_claim(claim, txid, nout,
+                                                            block_height, claim_address)
+                self.storage.write_undo_claim_info(block_height, self.lbrycrdd_height,
+                                                   claim_id, undo_claim_info)
+
+        elif type(claim) == deserialize.ClaimSupport:
+            name = self.storage.get_claim_name(claim.claim_id.encode('hex'))
+            print_log("Found (but ignoring) support for lbry://%s#%s" % (name, claim.claim_id.encode('hex')))
+
     def import_block(self, block, block_hash, block_height, revert=False):
 
         touched_addr = set()
@@ -420,6 +442,27 @@ class BlockchainProcessor(Processor):
             else:
                 undo = undo_info.pop(txid)
                 self.storage.revert_transaction(txid, tx, block_height, touched_addr, undo)
+
+            imported_claim = False
+
+            for x in tx.get('outputs'):
+                script = x.get('raw_output_script').decode('hex')
+                nout = x.get('index')
+                decoded_script = [s for s in deserialize.script_GetOp(script)]
+                out = deserialize.decode_claim_script(decoded_script)
+
+                if out is not False:
+                    claim, claim_script = out
+                    self.import_claim_transaction(claim, script, txid, nout, block_height, revert)
+                    imported_claim = True
+
+            if not imported_claim:
+                # if there wasn't an update, make sure the tx didn't spend a claim
+                for x in tx.get('inputs'):
+                    txid, nout = x['prevout_hash'], x['prevout_n']
+                    claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
+                    if claim_id:
+                        self.storage.remove_claim(claim_id)
 
         if revert:
             assert undo_info == {}
@@ -444,9 +487,10 @@ class BlockchainProcessor(Processor):
         # see if we can get if from cache. if not, add request to queue
         message_id = request.get('id')
         try:
-            result = self.process(request, cache_only=True)
+            result = self.process(request, cache_only=False)
         except BaseException as e:
-            print_log("Bad request from", session.address, str(e))
+            print_log("Bad request from", session.address, str(type(e)), ":", str(e))
+            traceback.print_exc()
             self.push_response(session, {'id': message_id, 'error': str(e)})
             return
         except:
@@ -570,11 +614,7 @@ class BlockchainProcessor(Processor):
                     # If we return anything that's not the transaction hash,
                     #  it's considered an error message
                     message = error["message"]
-                    if "non-mandatory-script-verify-flag" in message:
-                        result = "Your client produced a transaction that is not accepted by the Bitcoin network any more. Please upgrade to Electrum 2.5.1 or newer\n"
-                    else:
-                        result = "The transaction was rejected by network rules.(" + message + ")\n" \
-                                                                                               "[" + params[0] + "]"
+                    result = "The transaction was rejected by network rules.(%s)\n[%s]" % (message, params[0])
                 else:
                     result = error["message"]  # do send an error
                 print_log("error:", result)
@@ -604,11 +644,17 @@ class BlockchainProcessor(Processor):
             proof = self.lbrycrdd('getnameproof', args)
             result = {'proof': proof}
             if 'txhash' in proof and 'nOut' in proof:
+                txid, nout = proof['txhash'], proof['nOut']
                 transaction = self.lbrycrdd('getrawtransaction', (proof['txhash'],))
                 result['transaction'] = transaction
+                claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
+                result['claim_id'] = claim_id
+                claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
+                result['claim_sequence'] = claim_sequence
+
             claim_info = self.lbrycrdd('getclaimsforname', (name,))
             supports = []
-            if len(claim_info['claims']) > 0: 
+            if len(claim_info['claims']) > 0:
                 supports = claim_info['claims'][0]['supports']
             result['supports'] = [[support['txid'], support['n'], support['nAmount']] for support in supports]
 
@@ -616,19 +662,93 @@ class BlockchainProcessor(Processor):
             txid = params[0]
             args = (txid,)
             result = self.lbrycrdd('getclaimsfortx', args)
+            if result:
+                results_for_return = []
+                for claim in result:
+                    claim['value'] = self.storage.get_claim_value(str(claim['claimId'])).encode('hex')
+                    results_for_return.append(claim)
+                result = results_for_return
+
         elif method == 'blockchain.claimtrie.getclaimsforname':
             name = params[0]
             args = (name,)
             result = self.lbrycrdd('getclaimsforname', args)
+            if result:
+                claims = []
+                for claim in result['claims']:
+                    claim['value'] = self.storage.get_claim_value(str(claim['claimId'])).encode('hex')
+                    claim['claim_sequence'] = self.storage.get_n_for_name_and_claimid(str(name), str(claim['claimId']))
+                    claims.append(claim)
+                result['claims'] = claims
+
         elif method == 'blockchain.block.get_block':
             blockhash = params[0]
             args = (blockhash,)
             result = self.lbrycrdd('getblock', args)
+
         elif method == 'blockchain.claimtrie.get':
             result = self.lbrycrdd('getclaimtrie')
+
+        elif method == 'blockchain.claimtrie.getclaimbyid':
+            claim_id = str(params[0])
+            result = self.get_claim_info(claim_id)
+
+        elif method == 'blockchain.claimtrie.getnthclaimforname':
+            name = str(params[0])
+            n = int(params[1])
+            claim_id = str(self.storage.get_claimid_for_nth_claim_to_name(name, n))
+            if claim_id:
+                result = self.get_claim_info(claim_id)
+
+        elif method == 'blockchain.claimtrie.getclaimssignedby':
+            name = str(params[0])
+            winning_claim = self.lbrycrdd('getvalueforname', (str(name), ))
+            if winning_claim:
+                certificate_id = winning_claim['claimId']
+                claims = self.storage.get_claims_signed_by(certificate_id)
+                result = [self.get_claim_info(claim_id) for claim_id in claims]
+
+        elif method == 'blockchain.claimtrie.getclaimssignedbyid':
+            certificate_id = str(params[0])
+            if certificate_id:
+                claims = self.storage.get_claims_signed_by(certificate_id)
+                result = [self.get_claim_info(claim_id) for claim_id in claims]
+
+        elif method == 'blockchain.claimtrie.getclaimssignedbynthtoname':
+            name = str(params[0])
+            n = int(params[1])
+            certificate_id = str(self.storage.get_claimid_for_nth_claim_to_name(name, n))
+            if certificate_id:
+                claims = self.storage.get_claims_signed_by(certificate_id)
+                result = [self.get_claim_info(claim_id) for claim_id in claims]
+
         else:
             raise BaseException("unknown method:%s" % method)
 
+        return result
+
+    def get_claim_info(self, claim_id):
+        result = {}
+        claim_name = self.storage.get_claim_name(claim_id)
+        claim_value = self.storage.get_claim_value(claim_id)
+        claim_out = self.storage.get_txid_nout_from_claim_id(claim_id)
+        claim_height = self.storage.get_claim_height(claim_id)
+        if claim_name and claim_id:
+            claim_sequence = self.storage.get_n_for_name_and_claimid(claim_name, claim_id)
+        else:
+            claim_sequence = None
+        if None not in (claim_name, claim_value, claim_out, claim_height, claim_sequence):
+            claim_txid, claim_nout = claim_out
+            claim_value = claim_value.encode('hex')
+            result = {
+                "name": claim_name,
+                "claim_id": claim_id,
+                "txid": claim_txid,
+                "nout": claim_nout,
+                "depth": self.lbrycrdd_height - claim_height,
+                "value": claim_value,
+                "claim_sequence": claim_sequence
+            }
         return result
 
     def get_block(self, block_hash):

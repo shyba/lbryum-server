@@ -1,12 +1,8 @@
-import json
 import Queue as queue
-import socket
 import threading
 import time
-import sys
-
-from utils import random_string, timestr, print_log
-from utils import logger
+from lbryumserver.utils import print_log
+from lbryumserver.utils import logger
 
 
 class Shared:

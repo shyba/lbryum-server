@@ -16,19 +16,45 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from itertools import imap
+import hashlib
+import logging
+import logging.handlers
+import os
 import threading
 import time
-import hashlib
-import sys
+from itertools import imap
+
+logger = logging.getLogger("lbryumserver")
+
+
+def init_logger(logfile):
+    hdlr = logging.handlers.WatchedFileHandler(logfile)
+    formatter = logging.Formatter('%(asctime)s %(message)s', "[%d/%m/%Y-%H:%M:%S]")
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr)
+    logger.setLevel(logging.INFO)
+
+
+def print_log(*args):
+    logger.info(" ".join(imap(str, args)))
+
+
+def print_warning(message):
+    logger.warning(message)
+
 
 __b58chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 __b58base = len(__b58chars)
 
 global PUBKEY_ADDRESS
 global SCRIPT_ADDRESS
+global PUBKEY_ADDRESS_PREFIX
+global SCRIPT_ADDRESS_PREFIX
+
 PUBKEY_ADDRESS = 0
 SCRIPT_ADDRESS = 5
+PUBKEY_ADDRESS_PREFIX = 85
+SCRIPT_ADDRESS_PREFIX = 122
 
 
 def rev_hex(s):
@@ -69,9 +95,12 @@ def PoWHash(x):
     return r3
 
 
-hash_encode = lambda x: x[::-1].encode('hex')
+def hash_encode(x):
+    return x[::-1].encode('hex')
 
-hash_decode = lambda x: x.decode('hex')[::-1]
+
+def hash_decode(x):
+    return x.decode('hex')[::-1]
 
 
 def header_to_string(res):
@@ -109,14 +138,9 @@ def header_from_string(s):
 
 
 def hash_160(public_key):
-    try:
-        md = hashlib.new('ripemd160')
-        md.update(hashlib.sha256(public_key).digest())
-        return md.digest()
-    except:
-        import ripemd
-        md = ripemd.new(hashlib.sha256(public_key).digest())
-        return md.digest()
+    md = hashlib.new('ripemd160')
+    md.update(hashlib.sha256(public_key).digest())
+    return md.digest()
 
 
 def public_key_to_pubkey_address(public_key):
@@ -150,9 +174,9 @@ def hash_160_to_address(h160, addrtype=0):
         return None
 
     if addrtype == 0:
-        c = chr(85)
+        c = chr(PUBKEY_ADDRESS_PREFIX)
     elif addrtype == 5:
-        c = chr(122)
+        c = chr(SCRIPT_ADDRESS_PREFIX)
 
     vh160 = c + h160
     h = Hash(vh160)
@@ -238,7 +262,6 @@ def DecodeBase58Check(psz):
 
 
 ########### end pywallet functions #######################
-import os
 
 
 def random_string(length):
@@ -247,29 +270,6 @@ def random_string(length):
 
 def timestr():
     return time.strftime("[%d/%m/%Y-%H:%M:%S]")
-
-
-### logger
-import logging
-import logging.handlers
-
-logger = logging.getLogger('lbryum')
-
-
-def init_logger(logfile):
-    hdlr = logging.handlers.WatchedFileHandler(logfile)
-    formatter = logging.Formatter('%(asctime)s %(message)s', "[%d/%m/%Y-%H:%M:%S]")
-    hdlr.setFormatter(formatter)
-    logger.addHandler(hdlr)
-    logger.setLevel(logging.INFO)
-
-
-def print_log(*args):
-    logger.info(" ".join(imap(str, args)))
-
-
-def print_warning(message):
-    logger.warning(message)
 
 
 # profiler
