@@ -3,3 +3,8 @@ jsonrpclib
 python-bitcoinrpc==0.1
 appdirs
 git+https://github.com/lbryio/lbryschema.git
+# below requirements needed for lbryschema library
+protobuf==3.0.0
+ecdsa==0.13
+jsonschema==2.5.1
+
