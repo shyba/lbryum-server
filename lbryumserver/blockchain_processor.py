@@ -645,12 +645,15 @@ class BlockchainProcessor(Processor):
             result = {'proof': proof}
             if 'txhash' in proof and 'nOut' in proof:
                 txid, nout = proof['txhash'], proof['nOut']
-                transaction = self.lbrycrdd('getrawtransaction', (proof['txhash'],))
+                transaction_info = self.lbrycrdd('getrawtransaction', (proof['txhash'], 1))
+                transaction = transaction_info['hex']
+                transaction_height = self.lbrycrdd_height - transaction_info['confirmations']
                 result['transaction'] = transaction
                 claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
                 result['claim_id'] = claim_id
                 claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
                 result['claim_sequence'] = claim_sequence
+                result['height'] = transaction_height + 1
 
             claim_info = self.lbrycrdd('getclaimsforname', (name,))
             supports = []
