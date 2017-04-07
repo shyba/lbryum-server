@@ -733,6 +733,7 @@ class BlockchainProcessor(Processor):
         claim_value = self.storage.get_claim_value(claim_id)
         claim_out = self.storage.get_txid_nout_from_claim_id(claim_id)
         claim_height = self.storage.get_claim_height(claim_id)
+        claim_address = self.storage.get_claim_address(claim_id)
         if claim_name and claim_id:
             claim_sequence = self.storage.get_n_for_name_and_claimid(claim_name, claim_id)
         else:
@@ -747,7 +748,8 @@ class BlockchainProcessor(Processor):
                 "nout": claim_nout,
                 "depth": self.lbrycrdd_height - claim_height,
                 "value": claim_value,
-                "claim_sequence": claim_sequence
+                "claim_sequence": claim_sequence,
+                "address": claim_address
             }
         return result
 

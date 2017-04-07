@@ -314,6 +314,9 @@ class Storage(object):
         if height is not None:
             return int(height)
 
+    def get_claim_address(self, claim_id):
+        return self.db_claim_addrs.get(claim_id)
+
     def get_claim_name(self, claim_id):
         return self.db_claim_names.get(claim_id)
 
