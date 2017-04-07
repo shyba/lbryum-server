@@ -748,10 +748,24 @@ class BlockchainProcessor(Processor):
                 "txid": claim_txid,
                 "nout": claim_nout,
                 "depth": self.lbrycrdd_height - claim_height,
+                "height": claim_height,
                 "value": claim_value,
                 "claim_sequence": claim_sequence,
                 "address": claim_address
             }
+
+            lbrycrdd_results = self.lbrycrdd("getclaimsforname", (claim_name, ))
+            lbrycrdd_claim = None
+            if lbrycrdd_results:
+                for claim in lbrycrdd_results['claims']:
+                    if claim['claimId'] == claim_id and claim['txid'] == claim_txid and claim['n'] == claim_nout:
+                        lbrycrdd_claim = claim
+                        break
+                if lbrycrdd_claim:
+                    result['amount'] = lbrycrdd_claim['nAmount']
+                    result['effective_amount'] = lbrycrdd_claim['nEffectiveAmount']
+                    result['valid_at_height'] = lbrycrdd_claim['nValidAtHeight']
+
         return result
 
     def get_block(self, block_hash):
