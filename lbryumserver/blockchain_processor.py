@@ -665,8 +665,9 @@ class BlockchainProcessor(Processor):
             if result:
                 results_for_return = []
                 for claim in result:
-                    claim['value'] = self.storage.get_claim_value(str(claim['claimId'])).encode('hex')
-                    results_for_return.append(claim)
+                    claim_id = str(claim['claimId'])
+                    cached_claim = self.get_claim_info(claim_id)
+                    results_for_return.append(cached_claim)
                 result = results_for_return
 
         elif method == 'blockchain.claimtrie.getclaimsforname':
