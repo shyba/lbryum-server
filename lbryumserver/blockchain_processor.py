@@ -676,9 +676,9 @@ class BlockchainProcessor(Processor):
             if result:
                 claims = []
                 for claim in result['claims']:
-                    claim['value'] = self.storage.get_claim_value(str(claim['claimId'])).encode('hex')
-                    claim['claim_sequence'] = self.storage.get_n_for_name_and_claimid(str(name), str(claim['claimId']))
-                    claims.append(claim)
+                    claim_id = str(claim['claimId'])
+                    stored_claim = self.get_claim_info(claim_id)
+                    claims.append(stored_claim)
                 result['claims'] = claims
 
         elif method == 'blockchain.block.get_block':
