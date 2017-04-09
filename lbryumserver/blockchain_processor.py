@@ -765,6 +765,8 @@ class BlockchainProcessor(Processor):
                         lbrycrdd_claim = claim
                         break
                 if lbrycrdd_claim:
+                    result['supports'] = [[support['txid'], support['n'], support['nAmount']] for
+                                          support in lbrycrdd_claim['supports']]
                     result['amount'] = lbrycrdd_claim['nAmount']
                     result['effective_amount'] = lbrycrdd_claim['nEffectiveAmount']
                     result['valid_at_height'] = lbrycrdd_claim['nValidAtHeight']
