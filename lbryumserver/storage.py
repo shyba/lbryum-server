@@ -656,12 +656,16 @@ class Storage(object):
 
     def get_claimid_for_nth_claim_to_name(self, name, n):
         claims = self.db_claim_order.get(name)
+        if claims is None:
+            return None
         for claim_id, i in json.loads(claims).iteritems():
             if i == n:
                 return claim_id
 
     def get_n_for_name_and_claimid(self, name, claim_id):
         claims = self.db_claim_order.get(name)
+        if claims is None:
+            return None
         for id, n in json.loads(claims).iteritems():
             if id == claim_id:
                 return n
