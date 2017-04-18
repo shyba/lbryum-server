@@ -721,7 +721,7 @@ class BlockchainProcessor(Processor):
         elif method == 'blockchain.claimtrie.getclaimssignedbynthtoname':
             name = str(params[0])
             n = int(params[1])
-            certificate_id = str(self.storage.get_claimid_for_nth_claim_to_name(name, n))
+            certificate_id = self.storage.get_claimid_for_nth_claim_to_name(name, n)
             if certificate_id:
                 claims = self.storage.get_claims_signed_by(certificate_id)
                 result = [self.get_claim_info(claim_id) for claim_id in claims]
