@@ -2,9 +2,8 @@ plyvel
 jsonrpclib
 python-bitcoinrpc==0.1
 appdirs
-git+https://github.com/lbryio/lbryschema.git
+git+https://github.com/lbryio/lbryschema.git@v0.0.3#egg=lbryschema
 # below requirements needed for lbryschema library
-protobuf==3.0.0
+protobuf==3.2.0
 ecdsa==0.13
 jsonschema==2.5.1
-
