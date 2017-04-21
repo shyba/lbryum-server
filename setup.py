@@ -7,7 +7,7 @@ requires = [
     'plyvel==0.9',
     'jsonrpclib',
     'python-bitcoinrpc==0.1',
-    'appdirs==1.4.3'
+    'appdirs==1.4.3',
     'lbryschema==0.0.4',
 ]
 
