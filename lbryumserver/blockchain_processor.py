@@ -420,6 +420,23 @@ class BlockchainProcessor(Processor):
             name = self.storage.get_claim_name(claim.claim_id.encode('hex'))
             print_log("Found (but ignoring) support for lbry://%s#%s" % (name, claim.claim_id.encode('hex')))
 
+    """
+    a claim could be invalid if it is an update but does not spend the claim it is
+    updating
+    """
+    def _is_valid_claim(self, claim, tx):
+        if type(claim) == deserialize.ClaimUpdate:
+            claim_id = deserialize.claim_id_bytes_to_hex(claim.claim_id)
+            for i in tx.get('inputs'):
+                txid = i['prevout_hash']
+                nout = i['prevout_n']
+                if claim_id == self.storage.get_claim_id_from_outpoint(txid, nout):
+                    return True
+            logger.warn("Found invalid update for:{}".format(claim_id))
+            return False
+        else:
+            return True
+
     def import_block(self, block, block_hash, block_height, revert=False):
 
         touched_addr = set()
@@ -450,11 +467,11 @@ class BlockchainProcessor(Processor):
                 nout = x.get('index')
                 decoded_script = [s for s in deserialize.script_GetOp(script)]
                 out = deserialize.decode_claim_script(decoded_script)
-
                 if out is not False:
                     claim, claim_script = out
-                    self.import_claim_transaction(claim, script, txid, nout, block_height, revert)
-                    imported_claim = True
+                    if self._is_valid_claim(claim, tx):
+                        self.import_claim_transaction(claim, script, txid, nout, block_height, revert)
+                        imported_claim = True
 
             if not imported_claim:
                 # if there wasn't an update, make sure the tx didn't spend a claim
