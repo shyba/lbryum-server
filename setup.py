@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-import lbryumserver
+from lbryumserver import __version__
 import os
 import sys
 
@@ -18,10 +18,9 @@ if sys.platform == "darwin":
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 setup(
-
     name="lbryum-server",
     packages=find_packages(base_dir),
-    version=lbryumserver.__version__,
+    version=__version__,
     entry_points={'console_scripts': ['lbryum-server = lbryumserver.main:main']},
     install_requires=requires,
     description="LBRY Electrum Server",
