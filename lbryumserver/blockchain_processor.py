@@ -675,7 +675,10 @@ class BlockchainProcessor(Processor):
             claim_info = self.lbrycrdd('getclaimsforname', (name,))
             supports = []
             if len(claim_info['claims']) > 0:
-                supports = claim_info['claims'][0]['supports']
+                for claim in claim_info['claims']:
+                    if claim['claimId'] == claim_id:
+                        supports = claim['supports']
+                        break
             result['supports'] = [[support['txid'], support['n'], support['nAmount']] for support in supports]
 
         elif method == 'blockchain.claimtrie.getclaimsintx':
