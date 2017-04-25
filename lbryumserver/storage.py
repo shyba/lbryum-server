@@ -643,9 +643,7 @@ class Storage(object):
 
     # get claim id in hex from txid in hex and nout int
     def _get_claim_id(self, txid, nout):
-        claim_id = deserialize.claim_id_hash(deserialize.rev_hex(txid).decode('hex'),nout)
-        claim_id = deserialize.claim_id_bytes_to_hex(claim_id)
-        return claim_id
+        return txid_hex_nout_to_claim_id_hex(txid, nout)
 
     # get claim id from db from claim outpoint
     def get_claim_id_from_outpoint(self, txid, nout):

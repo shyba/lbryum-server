@@ -17,6 +17,12 @@ def claim_id_hash(txid, n):
 def claim_id_bytes_to_hex(claim_id_bytes):
     return rev_hex(claim_id_bytes.encode('hex'))
 
+def txid_hex_nout_to_claim_id_hex(txid_hex, nout):
+    claim_id = deserialize.claim_id_hash(deserialize.rev_hex(txid).decode('hex'),nout)
+    claim_id = deserialize.claim_id_bytes_to_hex(claim_id)
+    return claim_id
+
+    
 class SerializationError(Exception):
     """Thrown when there's a problem deserializing or serializing."""
 
@@ -455,3 +461,27 @@ def get_address_from_output_script(bytes):
         return addr
 
     return None
+
+# Get claim ID in hex, given a transaction in hex containing
+# the claim, and the corresponding txid and its nout
+def get_claim_id_from_raw_tx(tx_hex, txid_hex, nout):
+    tx = parse_Transaction(tx_hex.decode('hex'))
+    tx_outs = tx.get('outputs')
+    if len(tx_outs) < nout+1:
+        raise Exception("nout {} too large for tx {}".format(nout, tx))
+    output = tx.get('outputs')[nout]
+    assert(output.get('index')==nout)
+    script = output.get('raw_output_script')
+    decoded_script = [s for s in deserialize.script_GetOp(script)]
+    out = deserialize.decode_claim_script(decoded_script)
+    if out is False:
+        raise Exception("{} is not a claim script".format(nout))
+    claim,claim_script = out
+    # if name claim, calculate claim id from txid nout
+    if type(claim) == deserialize.NameClaim:
+        return txid_hex_nout_to_claim_id_hex(txid_hex, nout)
+    # if update or support, return the claim id in the script
+    else:
+        return deserialize.claim_id_bytes_to_hex(claim.claim_id)
+
+
