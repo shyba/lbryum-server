@@ -660,26 +660,16 @@ class BlockchainProcessor(Processor):
                 args = args + (block_hash,)
             proof = self.lbrycrdd('getnameproof', args)
             result = {'proof': proof}
+            # if there is a claim on the name txhash and nOut will exist
             if 'txhash' in proof and 'nOut' in proof:
                 txid, nout = proof['txhash'], proof['nOut']
                 transaction_info = self.lbrycrdd('getrawtransaction', (proof['txhash'], 1))
                 transaction = transaction_info['hex']
-                transaction_height = self.lbrycrdd_height - transaction_info['confirmations']
+                transaction_height = self.lbrycrdd_height - transaction_info['confirmations'] +1
                 result['transaction'] = transaction
-                claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
-                result['claim_id'] = claim_id
-                claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
-                result['claim_sequence'] = claim_sequence
-                result['height'] = transaction_height + 1
+                result['height'] = transaction_height
 
-            claim_info = self.lbrycrdd('getclaimsforname', (name,))
-            supports = []
-            if len(claim_info['claims']) > 0:
-                for claim in claim_info['claims']:
-                    if claim['claimId'] == claim_id:
-                        supports = claim['supports']
-                        break
-            result['supports'] = [[support['txid'], support['n'], support['nAmount']] for support in supports]
+
 
         elif method == 'blockchain.claimtrie.getclaimsintx':
             txid = params[0]
