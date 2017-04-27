@@ -179,19 +179,32 @@ class Storage(object):
         if not os.path.exists(self.dbpath):
             os.mkdir(self.dbpath)
         try:
+            # key = address key, value = utxos
             self.db_utxo = DB(self.dbpath, 'utxo', config.getint('leveldb', 'utxo_cache'))
+            # key = address, value = history
             self.db_hist = DB(self.dbpath, 'hist', config.getint('leveldb', 'hist_cache'))
+            # key = outpoint, value = address
             self.db_addr = DB(self.dbpath, 'addr', config.getint('leveldb', 'addr_cache'))
+            # key = undo id, valude = undo info
             self.db_undo = DB(self.dbpath, 'undo', None)
+            # key = claim id hex, value = txid hex sting + nout
             self.db_claimid = DB(self.dbpath, 'claimid', config.getint('leveldb', 'claimid_cache'))
+            # key = claim id hex, value = undo info
             self.db_undo_claim = DB(self.dbpath, 'undo_claim', 256 * 1024 * 1024)
+            # key = claim id hex, value = claim value
             self.db_claim_values = DB(self.dbpath, 'claim_values',
                                       config.getint('leveldb', 'claim_value_cache'))
+            # key = claim id hex, value = claim height
             self.db_claim_height = DB(self.dbpath, 'claim_height', 4 * 1024 * 1024)
+            # key = claim id hex, value = claim name
             self.db_claim_names = DB(self.dbpath, 'claim_names', 64 * 1024 * 1024)
+            # key = claim name, value = {claim_id:claim_sequence,}
             self.db_claim_order = DB(self.dbpath, 'claim_order', 4 * 1024 * 1024)
+            # key = claim id, value = claim value
             self.db_certificate_claims = DB(self.dbpath, 'certificate_claim', 128 * 1024 * 1024)
+            # key = claim_id hex, value = certificate id
             self.db_signed_claims = DB(self.dbpath, 'signed_claims', 256 * 1024 * 1024)
+            # key = claim id hex, value = address
             self.db_claim_addrs = DB(self.dbpath, 'claim_addresses', 64 * 1024 * 1024)
         except:
             logger.error('db init', exc_info=True)
