@@ -394,7 +394,7 @@ class BlockchainProcessor(Processor):
             is_coinbase = False
         return tx_hashes, txdict
 
-    def import_claim_transaction(self, claim, script, txid, nout, block_height, revert):
+    def import_claim_transaction(self, claim, script, txid, nout, amount, block_height, revert):
         if type(claim) in [deserialize.NameClaim, deserialize.ClaimUpdate]:
             if type(claim) == deserialize.ClaimUpdate:
                 is_claim_update = True
@@ -465,12 +465,13 @@ class BlockchainProcessor(Processor):
             for x in tx.get('outputs'):
                 script = x.get('raw_output_script').decode('hex')
                 nout = x.get('index')
+                amount = x.get('value')
                 decoded_script = [s for s in deserialize.script_GetOp(script)]
                 out = deserialize.decode_claim_script(decoded_script)
                 if out is not False:
                     claim, claim_script = out
                     if self._is_valid_claim(claim, tx):
-                        self.import_claim_transaction(claim, script, txid, nout, block_height, revert)
+                        self.import_claim_transaction(claim, script, txid, nout, amount, block_height, revert)
                         imported_claim = True
 
             if not imported_claim:
@@ -726,6 +727,15 @@ class BlockchainProcessor(Processor):
 
         elif method == 'blockchain.claimtrie.getclaimssignedby':
             name = str(params[0])
+            # lbrycrdd value has been updated, but storage not
+            #   -  new winning channel claim:
+            #       problems if claims signed by were also created in the same block
+            #
+            #
+            #
+            # if storage is updated after lbrycrdd call
+            #   - new winning claim
+            #       problem if old winning claims signed were abandoned
             winning_claim = self.lbrycrdd('getvalueforname', (str(name), ))
             if winning_claim:
                 certificate_id = winning_claim['claimId']
@@ -755,7 +765,7 @@ class BlockchainProcessor(Processor):
         result = {}
         claim_name = self.storage.get_claim_name(claim_id)
         claim_value = self.storage.get_claim_value(claim_id)
-        claim_out = self.storage.get_txid_nout_from_claim_id(claim_id)
+        claim_out = self.storage.get_txid_nout_amount_from_claim_id(claim_id)
         claim_height = self.storage.get_claim_height(claim_id)
         claim_address = self.storage.get_claim_address(claim_id)
         if claim_name and claim_id:
@@ -763,13 +773,14 @@ class BlockchainProcessor(Processor):
         else:
             claim_sequence = None
         if None not in (claim_name, claim_value, claim_out, claim_height, claim_sequence):
-            claim_txid, claim_nout = claim_out
+            claim_txid, claim_nout, claim_amount = claim_out
             claim_value = claim_value.encode('hex')
             result = {
                 "name": claim_name,
                 "claim_id": claim_id,
                 "txid": claim_txid,
                 "nout": claim_nout,
+                "amount":claim_amount,
                 "depth": self.lbrycrdd_height - claim_height,
                 "height": claim_height,
                 "value": claim_value,
@@ -787,7 +798,6 @@ class BlockchainProcessor(Processor):
                 if lbrycrdd_claim:
                     result['supports'] = [[support['txid'], support['n'], support['nAmount']] for
                                           support in lbrycrdd_claim['supports']]
-                    result['amount'] = lbrycrdd_claim['nAmount']
                     result['effective_amount'] = lbrycrdd_claim['nEffectiveAmount']
                     result['valid_at_height'] = lbrycrdd_claim['nValidAtHeight']
 

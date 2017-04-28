@@ -187,7 +187,7 @@ class Storage(object):
             self.db_addr = DB(self.dbpath, 'addr', config.getint('leveldb', 'addr_cache'))
             # key = undo id, valude = undo info
             self.db_undo = DB(self.dbpath, 'undo', None)
-            # key = claim id hex, value = txid hex sting + nout
+            # key = claim id hex, value = {txid hex sting + nout:amount,}
             self.db_claimid = DB(self.dbpath, 'claimid', config.getint('leveldb', 'claimid_cache'))
             # key = claim id hex, value = undo info
             self.db_undo_claim = DB(self.dbpath, 'undo_claim', 256 * 1024 * 1024)
@@ -206,6 +206,9 @@ class Storage(object):
             self.db_signed_claims = DB(self.dbpath, 'signed_claims', 256 * 1024 * 1024)
             # key = claim id hex, value = address
             self.db_claim_addrs = DB(self.dbpath, 'claim_addresses', 64 * 1024 * 1024)
+            # key - claim id hex, value = {outpoint:amount,}
+            self.db_supports = DB(self.dbpth, 'claim_supports', 8 * 1024 * 1024)
+
         except:
             logger.error('db init', exc_info=True)
             self.shared.stop()
@@ -683,13 +686,15 @@ class Storage(object):
             if id == claim_id:
                 return n
 
-    def get_txid_nout_from_claim_id(self, claim_id):
+    def get_txid_nout_amount_from_claim_id(self, claim_id):
         txid_nout = self.db_claimid.get(claim_id)
         if txid_nout is None:
             return None
         txid = txid_nout[0:64]
         nout = hex_to_int(txid_nout[64:72].decode('hex'))
-        return txid, nout
+        amount = hex_to_int(txid_nout[72:88].decode('hex'))
+
+        return txid, nout, amount
 
     def _iter_claims_signed_by(self, certificate_id):
         for claim_id, cert_id in self.db_signed_claims.db:
@@ -772,8 +777,8 @@ class Storage(object):
                 self.db_signed_claims.delete(channel_claim_id)
             self.db_certificate_claims.delete(claim_id)
 
-    def import_claim(self, claim, txid, nout, block_height, claim_address):
-        txid_nout = txid+int_to_hex(nout, 4)
+    def import_claim(self, claim, txid, nout, amount, block_height, claim_address):
+        txid_nout_amount = txid+int_to_hex(nout, 4)+int_to_hex(amount,8)
         is_update = type(claim) == deserialize.ClaimUpdate
 
         if type(claim) not in [deserialize.NameClaim, deserialize.ClaimUpdate]:
@@ -796,7 +801,7 @@ class Storage(object):
         self.db_claim_order.delete(claim.name)
         self.db_claim_order.put(claim.name, json.dumps(claims_for_name))
 
-        self.db_claimid.put(claim_id, txid_nout)
+        self.db_claimid.put(claim_id, txid_nout_amount)
         self.db_claim_names.put(claim_id, claim.name)
         self.db_claim_values.put(claim_id, claim.value)
         self.db_claim_height.put(claim_id, str(block_height))
