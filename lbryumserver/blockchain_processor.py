@@ -420,11 +420,12 @@ class BlockchainProcessor(Processor):
             name = self.storage.get_claim_name(claim.claim_id.encode('hex'))
             print_log("Found (but ignoring) support for lbry://%s#%s" % (name, claim.claim_id.encode('hex')))
 
-    """
-    a claim could be invalid if it is an update but does not spend the claim it is
-    updating
-    """
     def _is_valid_claim(self, claim, tx):
+        """
+        a claim could be invalid if it is an update but does not spend the claim it is
+        updating
+        """
+
         if type(claim) == deserialize.ClaimUpdate:
             claim_id = deserialize.claim_id_bytes_to_hex(claim.claim_id)
             for i in tx.get('inputs'):
