@@ -19,7 +19,15 @@ HEADER_SIZE = 112
 BLOCKS_PER_CHUNK = 96
 
 
-class BlockchainProcessor(Processor):
+def command(cmd_name):
+    def _wrapper(fn):
+        setattr(fn, '_is_command', True)
+        setattr(fn, '_command_name', cmd_name)
+        return fn
+    return _wrapper
+
+
+class BlockchainProcessorBase(Processor):
     def __init__(self, config, shared):
         Processor.__init__(self)
 
@@ -420,11 +428,12 @@ class BlockchainProcessor(Processor):
             name = self.storage.get_claim_name(claim.claim_id.encode('hex'))
             print_log("Found (but ignoring) support for lbry://%s#%s" % (name, claim.claim_id.encode('hex')))
 
-    """
-    a claim could be invalid if it is an update but does not spend the claim it is
-    updating
-    """
     def _is_valid_claim(self, claim, tx):
+        """
+        a claim could be invalid if it is an update but does not spend the claim it is
+        updating
+        """
+
         if type(claim) == deserialize.ClaimUpdate:
             claim_id = deserialize.claim_id_bytes_to_hex(claim.claim_id)
             for i in tx.get('inputs'):
@@ -521,236 +530,6 @@ class BlockchainProcessor(Processor):
         else:
             self.push_response(session, {'id': message_id, 'result': result})
 
-    def do_subscribe(self, method, params, session):
-        with self.watch_lock:
-            if method == 'blockchain.numblocks.subscribe':
-                if session not in self.watch_blocks:
-                    self.watch_blocks.append(session)
-
-            elif method == 'blockchain.headers.subscribe':
-                if session not in self.watch_headers:
-                    self.watch_headers.append(session)
-
-            elif method == 'blockchain.address.subscribe':
-                address = params[0]
-                l = self.watched_addresses.get(address)
-                if l is None:
-                    self.watched_addresses[address] = [session]
-                elif session not in l:
-                    l.append(session)
-
-    def do_unsubscribe(self, method, params, session):
-        with self.watch_lock:
-            if method == 'blockchain.numblocks.subscribe':
-                if session in self.watch_blocks:
-                    self.watch_blocks.remove(session)
-            elif method == 'blockchain.headers.subscribe':
-                if session in self.watch_headers:
-                    self.watch_headers.remove(session)
-            elif method == "blockchain.address.subscribe":
-                addr = params[0]
-                l = self.watched_addresses.get(addr)
-                if not l:
-                    return
-                if session in l:
-                    l.remove(session)
-                if session in l:
-                    print_log("error rc!!")
-                    self.shared.stop()
-                if not l:
-                    self.watched_addresses.pop(addr)
-
-    def process(self, request, cache_only=False):
-
-        message_id = request['id']
-        method = request['method']
-        params = request.get('params', ())
-        result = None
-        error = None
-
-        if method == 'blockchain.numblocks.subscribe':
-            result = self.storage.height
-
-        elif method == 'blockchain.headers.subscribe':
-            result = self.header
-
-        elif method == 'blockchain.address.subscribe':
-            address = str(params[0])
-            result = self.get_status(address, cache_only)
-
-        elif method == 'blockchain.address.get_history':
-            address = str(params[0])
-            result = self.get_history(address, cache_only)
-
-        elif method == 'blockchain.address.get_mempool':
-            address = str(params[0])
-            result = self.get_unconfirmed_history(address)
-
-        elif method == 'blockchain.address.get_balance':
-            address = str(params[0])
-            confirmed = self.storage.get_balance(address)
-            unconfirmed = self.get_unconfirmed_value(address)
-            result = {'confirmed': confirmed, 'unconfirmed': unconfirmed}
-
-        elif method == 'blockchain.address.get_proof':
-            address = str(params[0])
-            result = self.storage.get_proof(address)
-
-        elif method == 'blockchain.address.listunspent':
-            address = str(params[0])
-            result = self.storage.listunspent(address)
-
-        elif method == 'blockchain.utxo.get_address':
-            txid = str(params[0])
-            pos = int(params[1])
-            txi = (txid + int_to_hex(pos, 4)).decode('hex')
-            result = self.storage.get_address(txi)
-
-        elif method == 'blockchain.block.get_header':
-            if cache_only:
-                result = -1
-            else:
-                height = int(params[0])
-                result = self.get_header(height)
-
-        elif method == 'blockchain.block.get_chunk':
-            if cache_only:
-                result = -1
-            else:
-                index = int(params[0])
-                result = self.get_chunk(index)
-
-        elif method == 'blockchain.transaction.broadcast':
-            try:
-                txo = self.lbrycrdd('sendrawtransaction', params)
-                print_log("sent tx:", txo)
-                result = txo
-            except BaseException, e:
-                error = e.args[0]
-                if error["code"] == -26:
-                    # If we return anything that's not the transaction hash,
-                    #  it's considered an error message
-                    message = error["message"]
-                    result = "The transaction was rejected by network rules.(%s)\n[%s]" % (message, params[0])
-                else:
-                    result = error["message"]  # do send an error
-                print_log("error:", result)
-
-        elif method == 'blockchain.transaction.get_merkle':
-            tx_hash = params[0]
-            tx_height = params[1]
-            result = self.get_merkle(tx_hash, tx_height, cache_only)
-
-        elif method == 'blockchain.transaction.get':
-            tx_hash = params[0]
-            result = self.lbrycrdd('getrawtransaction', (tx_hash, 0))
-
-        elif method == 'blockchain.estimatefee':
-            num = int(params[0])
-            result = self.lbrycrdd('estimatefee', (num,))
-
-        elif method == 'blockchain.relayfee':
-            result = self.relayfee
-
-        elif method == 'blockchain.claimtrie.getvalue':
-            name = params[0]
-            args = (name,)
-            if len(params) == 2:
-                block_hash = params[1]
-                args = args + (block_hash,)
-            proof = self.lbrycrdd('getnameproof', args)
-            result = {'proof': proof}
-            if 'txhash' in proof and 'nOut' in proof:
-                txid, nout = proof['txhash'], proof['nOut']
-                transaction_info = self.lbrycrdd('getrawtransaction', (proof['txhash'], 1))
-                transaction = transaction_info['hex']
-                transaction_height = self.lbrycrdd_height - transaction_info['confirmations']
-                result['transaction'] = transaction
-                claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
-                result['claim_id'] = claim_id
-                claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
-                result['claim_sequence'] = claim_sequence
-                result['height'] = transaction_height + 1
-
-            claim_info = self.lbrycrdd('getclaimsforname', (name,))
-            supports = []
-            if len(claim_info['claims']) > 0:
-                for claim in claim_info['claims']:
-                    if claim['claimId'] == claim_id:
-                        supports = claim['supports']
-                        break
-            result['supports'] = [[support['txid'], support['n'], support['nAmount']] for support in supports]
-
-        elif method == 'blockchain.claimtrie.getclaimsintx':
-            txid = params[0]
-            args = (txid,)
-            result = self.lbrycrdd('getclaimsfortx', args)
-            if result:
-                results_for_return = []
-                for claim in result:
-                    claim_id = str(claim['claimId'])
-                    cached_claim = self.get_claim_info(claim_id)
-                    results_for_return.append(cached_claim)
-                result = results_for_return
-
-        elif method == 'blockchain.claimtrie.getclaimsforname':
-            name = params[0]
-            args = (name,)
-            result = self.lbrycrdd('getclaimsforname', args)
-            if result:
-                claims = []
-                for claim in result['claims']:
-                    claim_id = str(claim['claimId'])
-                    stored_claim = self.get_claim_info(claim_id)
-                    claims.append(stored_claim)
-                result['claims'] = claims
-
-        elif method == 'blockchain.block.get_block':
-            blockhash = params[0]
-            args = (blockhash,)
-            result = self.lbrycrdd('getblock', args)
-
-        elif method == 'blockchain.claimtrie.get':
-            result = self.lbrycrdd('getclaimtrie')
-
-        elif method == 'blockchain.claimtrie.getclaimbyid':
-            claim_id = str(params[0])
-            result = self.get_claim_info(claim_id)
-
-        elif method == 'blockchain.claimtrie.getnthclaimforname':
-            name = str(params[0])
-            n = int(params[1])
-            claim_id = str(self.storage.get_claimid_for_nth_claim_to_name(name, n))
-            if claim_id:
-                result = self.get_claim_info(claim_id)
-
-        elif method == 'blockchain.claimtrie.getclaimssignedby':
-            name = str(params[0])
-            winning_claim = self.lbrycrdd('getvalueforname', (str(name), ))
-            if winning_claim:
-                certificate_id = winning_claim['claimId']
-                claims = self.storage.get_claims_signed_by(certificate_id)
-                result = [self.get_claim_info(claim_id) for claim_id in claims]
-
-        elif method == 'blockchain.claimtrie.getclaimssignedbyid':
-            certificate_id = str(params[0])
-            if certificate_id:
-                claims = self.storage.get_claims_signed_by(certificate_id)
-                result = [self.get_claim_info(claim_id) for claim_id in claims]
-
-        elif method == 'blockchain.claimtrie.getclaimssignedbynthtoname':
-            name = str(params[0])
-            n = int(params[1])
-            certificate_id = self.storage.get_claimid_for_nth_claim_to_name(name, n)
-            if certificate_id:
-                claims = self.storage.get_claims_signed_by(certificate_id)
-                result = [self.get_claim_info(claim_id) for claim_id in claims]
-
-        else:
-            raise BaseException("unknown method:%s" % method)
-
-        return result
-
     def get_claim_info(self, claim_id):
         result = {}
         claim_name = self.storage.get_claim_name(claim_id)
@@ -808,7 +587,6 @@ class BlockchainProcessor(Processor):
             return block
 
     def catch_up(self, sync=True):
-
         self.start_catchup_height = self.storage.height
         prev_root_hash = None
         n = 0
@@ -1033,3 +811,273 @@ class BlockchainProcessor(Processor):
                     'method': 'blockchain.address.subscribe',
                     'params': (addr, status),
                 })
+
+    def do_subscribe(self, method, params, session):
+        with self.watch_lock:
+            if method == 'blockchain.numblocks.subscribe':
+                if session not in self.watch_blocks:
+                    self.watch_blocks.append(session)
+
+            elif method == 'blockchain.headers.subscribe':
+                if session not in self.watch_headers:
+                    self.watch_headers.append(session)
+
+            elif method == 'blockchain.address.subscribe':
+                address = params[0]
+                l = self.watched_addresses.get(address)
+                if l is None:
+                    self.watched_addresses[address] = [session]
+                elif session not in l:
+                    l.append(session)
+
+    def do_unsubscribe(self, method, params, session):
+        with self.watch_lock:
+            if method == 'blockchain.numblocks.subscribe':
+                if session in self.watch_blocks:
+                    self.watch_blocks.remove(session)
+            elif method == 'blockchain.headers.subscribe':
+                if session in self.watch_headers:
+                    self.watch_headers.remove(session)
+            elif method == "blockchain.address.subscribe":
+                addr = params[0]
+                l = self.watched_addresses.get(addr)
+                if not l:
+                    return
+                if session in l:
+                    l.remove(session)
+                if session in l:
+                    print_log("error rc!!")
+                    self.shared.stop()
+                if not l:
+                    self.watched_addresses.pop(addr)
+
+    def _get_command(self, method):
+        for attr_name in dir(self):
+            if attr_name.startswith("cmd_"):
+                attr = getattr(self, attr_name)
+                if hasattr(attr, "_is_command") and hasattr(attr, "_command_name"):
+                    if attr._is_command and attr._command_name == method:
+                        return attr
+        raise BaseException("unknown method:%s" % method)
+
+    def process(self, request, cache_only=False):
+        message_id = request['id']
+        # TODO: do something with message id
+
+        fn = self._get_command(request['method'])
+        params = request.get('params', ())
+        if params == ():
+            return fn()
+        return fn(*params)
+
+
+class BlockchainProcessor(BlockchainProcessorBase):
+    @command('blockchain.numblocks.subscribe')
+    def cmd_numblocks_subscribe(self):
+        return self.storage.height
+
+    @command('blockchain.headers.subscribe')
+    def cmd_headers_subscribe(self):
+        return self.header
+
+    @command('blockchain.address.subscribe')
+    def cmd_address_subscribe(self, address, cache_only=False):
+        address = str(address)
+        return self.get_status(address, cache_only)
+
+    @command('blockchain.address.get_history')
+    def cmd_address_get_history(self, address, cache_only=False):
+        address = str(address)
+        return self.get_history(address, cache_only)
+
+    @command('blockchain.address.get_mempool')
+    def cmd_address_get_mempool(self, address):
+        address = str(address)
+        return self.get_unconfirmed_history(address)
+
+    @command('blockchain.address.get_balance')
+    def cmd_address_get_balance(self, address):
+        address = str(address)
+        confirmed = self.storage.get_balance(address)
+        unconfirmed = self.get_unconfirmed_value(address)
+        return {'confirmed': confirmed, 'unconfirmed': unconfirmed}
+
+    @command('blockchain.address.get_proof')
+    def cmd_address_get_proof(self, address):
+        address = str(address)
+        return self.storage.get_proof(address)
+
+    @command('blockchain.address.listunspent')
+    def cmd_address_list_unspent(self, address):
+        address = str(address)
+        return self.storage.listunspent(address)
+
+    @command('blockchain.utxo.get_address')
+    def cmd_utxo_get_address(self, txid, pos):
+        txid = str(txid)
+        pos = int(pos)
+        txi = (txid + int_to_hex(pos, 4)).decode('hex')
+        return self.storage.get_address(txi)
+
+    @command('blockchain.block.get_header')
+    def cmd_block_get_header(self, height, cache_only=False):
+        height = int(height)
+        if cache_only:
+            result = -1
+        else:
+            result = self.get_header(height)
+        return result
+
+    @command('blockchain.block.get_chunk')
+    def cmd_block_get_chunk(self, index, cache_only=False):
+        index = int(index)
+        if cache_only:
+            result = -1
+        else:
+            result = self.get_chunk(index)
+        return result
+
+    @command('blockchain.transaction.broadcast')
+    def cmd_transaction_broadcast(self, raw_transaction):
+        raw_transaction = str(raw_transaction)
+        try:
+            txo = self.lbrycrdd('sendrawtransaction', (raw_transaction,))
+            print_log("sent tx:", txo)
+            result = txo
+        except BaseException, e:
+            error = e.args[0]
+            if error["code"] == -26:
+                # If we return anything that's not the transaction hash,
+                #  it's considered an error message
+                message = error["message"]
+                result = "The transaction was rejected by network rules.(%s)\n[%s]" % (
+                    message, raw_transaction)
+            else:
+                result = error["message"]  # do send an error
+            print_log("error:", result)
+        return result
+
+    @command('blockchain.transaction.get_merkle')
+    def cmd_transaction_get_merkle(self, tx_hash, height, cache_only=False):
+        tx_hash = str(tx_hash)
+        height = int(height)
+        return self.get_merkle(tx_hash, height, cache_only)
+
+    @command('blockchain.transaction.get')
+    def cmd_transaction_get(self, tx_hash, height=None):
+        # height argument does nothing here but is used in lbryum synchronizer
+        tx_hash = str(tx_hash)
+        return self.lbrycrdd('getrawtransaction', (tx_hash, 0))
+
+    @command('blockchain.estimatefee')
+    def cmd_estimate_fee(self, num):
+        num = int(num)
+        return self.lbrycrdd('estimatefee', (num,))
+
+    @command('blockchain.relayfee')
+    def cmd_relay_fee(self):
+        return self.relayfee
+
+    @command('blockchain.claimtrie.getvalue')
+    def cmd_claimtrie_getvalue(self, name, block_hash=None):
+        name = str(name)
+        if block_hash:
+            proof = self.lbrycrdd('getnameproof', (name, block_hash))
+        else:
+            proof = self.lbrycrdd('getnameproof', (name,))
+
+        result = {'proof': proof}
+        if 'txhash' in proof and 'nOut' in proof:
+            txid, nout = proof['txhash'], proof['nOut']
+            transaction_info = self.lbrycrdd('getrawtransaction', (proof['txhash'], 1))
+            transaction = transaction_info['hex']
+            transaction_height = self.lbrycrdd_height - transaction_info['confirmations']
+            result['transaction'] = transaction
+            claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
+            result['claim_id'] = claim_id
+            claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
+            result['claim_sequence'] = claim_sequence
+            result['height'] = transaction_height + 1
+
+        claim_info = self.lbrycrdd('getclaimsforname', (name,))
+        supports = []
+        if len(claim_info['claims']) > 0:
+            for claim in claim_info['claims']:
+                if claim['claimId'] == claim_id:
+                    supports = claim['supports']
+                    break
+        result['supports'] = [[support['txid'], support['n'], support['nAmount']] for support in
+                              supports]
+        return result
+
+    @command('blockchain.claimtrie.getclaimsintx')
+    def cmd_claimtrie_getclaimsintx(self, txid):
+        txid = str(txid)
+        result = self.lbrycrdd('getclaimsfortx', (txid,))
+        if result:
+            results_for_return = []
+            for claim in result:
+                claim_id = str(claim['claimId'])
+                cached_claim = self.get_claim_info(claim_id)
+                results_for_return.append(cached_claim)
+            return results_for_return
+
+    @command('blockchain.claimtrie.getclaimsforname')
+    def cmd_claimtrie_getclaimsforname(self, name):
+        name = str(name)
+        result = self.lbrycrdd('getclaimsforname', (name,))
+        if result:
+            claims = []
+            for claim in result['claims']:
+                claim_id = str(claim['claimId'])
+                stored_claim = self.get_claim_info(claim_id)
+                claims.append(stored_claim)
+            result['claims'] = claims
+        return result
+
+    @command('blockchain.block.get_block')
+    def cmd_get_block(self, block_hash):
+        block_hash = str(block_hash)
+        return self.lbrycrdd('getblock', (block_hash,))
+
+    @command('blockchain.claimtrie.get')
+    def cmd_claimtrie_get(self):
+        return self.lbrycrdd('getclaimtrie')
+
+    @command('blockchain.claimtrie.getclaimbyid')
+    def cmd_claimtrie_getclaimbyid(self, claim_id):
+        claim_id = str(claim_id)
+        return self.get_claim_info(claim_id)
+
+    @command('blockchain.claimtrie.getnthclaimforname')
+    def cmd_claimtrie_getnthclaimforname(self, name, n):
+        name = str(name)
+        n = int(n)
+        claim_id = str(self.storage.get_claimid_for_nth_claim_to_name(name, n))
+        if claim_id:
+            return self.get_claim_info(claim_id)
+
+    @command('blockchain.claimtrie.getclaimssignedby')
+    def cmd_claimtrie_getclaimssignedby(self, name):
+        name = str(name)
+        winning_claim = self.lbrycrdd('getvalueforname', (name,))
+        if winning_claim:
+            certificate_id = winning_claim['claimId']
+            claims = self.storage.get_claims_signed_by(certificate_id)
+            return [self.get_claim_info(claim_id) for claim_id in claims]
+
+    @command('blockchain.claimtrie.getclaimssignedbyid')
+    def cmd_claimtrie_getclaimssignedbyid(self, certificate_id):
+        certificate_id = str(certificate_id)
+        if certificate_id:
+            claims = self.storage.get_claims_signed_by(certificate_id)
+            return [self.get_claim_info(claim_id) for claim_id in claims]
+
+    @command('blockchain.claimtrie.getclaimssignedbynthtoname')
+    def cmd_claimtrie_getclaimssignedbynthtoname(self, name, n):
+        name = str(name)
+        n = int(n)
+        certificate_id = self.storage.get_claimid_for_nth_claim_to_name(name, n)
+        if certificate_id:
+            claims = self.storage.get_claims_signed_by(certificate_id)
+            return [self.get_claim_info(claim_id) for claim_id in claims]
