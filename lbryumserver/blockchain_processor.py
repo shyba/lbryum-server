@@ -964,7 +964,8 @@ class BlockchainProcessor(BlockchainProcessorBase):
         return self.get_merkle(tx_hash, height, cache_only)
 
     @command('blockchain.transaction.get')
-    def cmd_transaction_get(self, tx_hash):
+    def cmd_transaction_get(self, tx_hash, height=None):
+        # height argument does nothing here but is used in lbryum synchronizer
         tx_hash = str(tx_hash)
         return self.lbrycrdd('getrawtransaction', (tx_hash, 0))
 
