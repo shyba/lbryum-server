@@ -57,10 +57,13 @@ def parse_lbrycrdd(conf_lines):
 
 
 def load_lbrycrdd_connection_info(config, wallet_conf):
+    type = config.get('network', 'type')
+    params = networks.params.get(type)
+
     settings = {
         "lbrycrdd_user": "rpcuser",
         "lbrycrdd_password": "rpcpassword",
-        "lbrycrdd_port": '9245',
+        "lbrycrdd_port": str(params.get('default_rpc_port')),
         "lbrycrdd_host": "localhost"
     }
     with open(wallet_conf, "r") as conf:
