@@ -298,7 +298,7 @@ class BlockchainProcessorBase(Processor):
         with self.cache_lock:
             hist = self.history_cache.get(addr)
         if hist is not None:
-            return hist
+            return sorted(hist, key=lambda x: x['height'])
         if cache_only:
             return -1
 
@@ -314,14 +314,14 @@ class BlockchainProcessorBase(Processor):
                 logger.info("clearing cache")
                 self.history_cache.clear()
             self.history_cache[addr] = hist
-        return hist
+        return sorted(hist, key=lambda x: x['height'])
 
     def get_unconfirmed_history(self, addr):
         hist = []
         with self.mempool_lock:
             for txid, delta in self.mempool_hist.get(addr, ()):
                 hist.append({'tx_hash': txid, 'height': 0})
-        return hist
+        return sorted(hist, key=lambda x: x['height'])
 
     def get_unconfirmed_value(self, addr):
         v = 0
