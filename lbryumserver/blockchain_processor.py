@@ -466,14 +466,16 @@ class BlockchainProcessorBase(Processor):
             if not revert:
                 undo = self.storage.import_transaction(txid, tx, block_height, touched_addr)
                 undo_info[txid] = undo
-
-                undo = self.storage.import_claim_transaction(txid, tx, block_height)
+               
+                with self.storage.claims_storage_lock:
+                    undo = self.storage.import_claim_transaction(txid, tx, block_height)
                 claim_undo_info[txid] = undo
             else:
                 undo = undo_info.pop(txid)
                 self.storage.revert_transaction(txid, tx, block_height, touched_addr, undo)
                 undo = claim_undo_info.pop(txid)
-                self.storage.revert_claim_transaction(undo)
+                with self.storage.claims_storage_lock:
+                    self.storage.revert_claim_transaction(undo)
 
         if revert:
             assert claim_undo_info == {}
@@ -519,7 +521,6 @@ class BlockchainProcessorBase(Processor):
 
     def get_claim_info(self, claim_id):
         result = {}
-        logger.warn("get_claim_info claim_id:{}".format(claim_id))
         claim_name = self.storage.get_claim_name(claim_id)
         claim_value = self.storage.get_claim_value(claim_id)
         claim_out = self.storage.get_outpoint_from_claim_id(claim_id)
@@ -542,20 +543,13 @@ class BlockchainProcessorBase(Processor):
                 "height": claim_height,
                 "value": claim_value,
                 "claim_sequence": claim_sequence,
-                "address": claim_address
+                "address": claim_address,
+                # TODO: legacy fields before race condition fixes
+                # kept here to not break lbrynet
+                "supports":[],
+                "effective_amount":0,
+                "valid_at_height":-1
             }
-            lbrycrdd_results = self.lbrycrdd("getclaimsforname", (claim_name, ))
-            lbrycrdd_claim = None
-            if lbrycrdd_results:
-                for claim in lbrycrdd_results['claims']:
-                    if claim['claimId'] == claim_id and claim['txid'] == claim_txid and claim['n'] == claim_nout:
-                        lbrycrdd_claim = claim
-                        break
-                if lbrycrdd_claim:
-                    result['supports'] = [[support['txid'], support['n'], support['nAmount']] for
-                                          support in lbrycrdd_claim['supports']]
-                    result['effective_amount'] = lbrycrdd_claim['nEffectiveAmount']
-                    result['valid_at_height'] = lbrycrdd_claim['nValidAtHeight']
 
         return result
 
@@ -974,27 +968,14 @@ class BlockchainProcessor(BlockchainProcessorBase):
             proof = self.lbrycrdd('getnameproof', (name,))
 
         result = {'proof': proof}
+		# if there is a claim on the name txhash and nOut will exist
         if 'txhash' in proof and 'nOut' in proof:
             txid, nout = proof['txhash'], proof['nOut']
             transaction_info = self.lbrycrdd('getrawtransaction', (proof['txhash'], 1))
             transaction = transaction_info['hex']
-            transaction_height = self.lbrycrdd_height - transaction_info['confirmations']
+            transaction_height = self.lbrycrdd_height - transaction_info['confirmations'] +1
             result['transaction'] = transaction
-            claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
-            result['claim_id'] = claim_id
-            claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
-            result['claim_sequence'] = claim_sequence
-            result['height'] = transaction_height + 1
-
-        claim_info = self.lbrycrdd('getclaimsforname', (name,))
-        supports = []
-        if len(claim_info['claims']) > 0:
-            for claim in claim_info['claims']:
-                if claim['claimId'] == claim_id:
-                    supports = claim['supports']
-                    break
-        result['supports'] = [[support['txid'], support['n'], support['nAmount']] for support in
-                              supports]
+            result['height'] = transaction_height
         return result
 
     @command('blockchain.claimtrie.getclaimsintx')
@@ -1002,25 +983,26 @@ class BlockchainProcessor(BlockchainProcessorBase):
         txid = str(txid)
         result = self.lbrycrdd('getclaimsfortx', (txid,))
         if result:
-            results_for_return = []
-            for claim in result:
-                claim_id = str(claim['claimId'])
-                cached_claim = self.get_claim_info(claim_id)
-                results_for_return.append(cached_claim)
-            return results_for_return
+            with self.storage.claims_storage_lock:
+                results_for_return = []
+                for claim in result:
+                    claim_id = str(claim['claimId'])
+                    # may not be able to retreive here if claim is abandoned
+                    cached_claim = self.get_claim_info(claim_id)
+                    if cached_claim:
+                        results_for_return.append(cached_claim)
+                return results_for_return
 
     @command('blockchain.claimtrie.getclaimsforname')
     def cmd_claimtrie_getclaimsforname(self, name):
         name = str(name)
-        result = self.lbrycrdd('getclaimsforname', (name,))
-        if result:
-            claims = []
-            for claim in result['claims']:
-                claim_id = str(claim['claimId'])
+        with self.storage.claims_storage_lock:
+            claims_for_name = self.storage.get_claims_for_name(name)
+            result = {'claims':[]}
+            for claim_id in claims_for_name.keys():
                 stored_claim = self.get_claim_info(claim_id)
-                claims.append(stored_claim)
-            result['claims'] = claims
-        return result
+                result['claims'].append(stored_claim)
+            return result
 
     @command('blockchain.block.get_block')
     def cmd_get_block(self, block_hash):
@@ -1034,37 +1016,43 @@ class BlockchainProcessor(BlockchainProcessorBase):
     @command('blockchain.claimtrie.getclaimbyid')
     def cmd_claimtrie_getclaimbyid(self, claim_id):
         claim_id = str(claim_id)
-        return self.get_claim_info(claim_id)
+        with self.storage.claims_storage_lock:
+            return self.get_claim_info(claim_id)
 
     @command('blockchain.claimtrie.getnthclaimforname')
     def cmd_claimtrie_getnthclaimforname(self, name, n):
         name = str(name)
         n = int(n)
-        claim_id = str(self.storage.get_claimid_for_nth_claim_to_name(name, n))
-        if claim_id:
-            return self.get_claim_info(claim_id)
+        with self.storage.claims_storage_lock:
+            claim_id = str(self.storage.get_claimid_for_nth_claim_to_name(name, n))
+            if claim_id:
+                return self.get_claim_info(claim_id)
 
     @command('blockchain.claimtrie.getclaimssignedby')
     def cmd_claimtrie_getclaimssignedby(self, name):
         name = str(name)
         winning_claim = self.lbrycrdd('getvalueforname', (name,))
+        # TODO: state may be different in lbrycrdd as storage
         if winning_claim:
             certificate_id = str(winning_claim['claimId'])
-            claims = self.storage.get_claims_signed_by(certificate_id)
-            return [self.get_claim_info(claim_id) for claim_id in claims]
+            with self.storage.claims_storage_lock:
+                claims = self.storage.get_claims_signed_by(certificate_id)
+                return [self.get_claim_info(claim_id) for claim_id in claims]
 
     @command('blockchain.claimtrie.getclaimssignedbyid')
     def cmd_claimtrie_getclaimssignedbyid(self, certificate_id):
         certificate_id = str(certificate_id)
         if certificate_id:
-            claims = self.storage.get_claims_signed_by(certificate_id)
-            return [self.get_claim_info(claim_id) for claim_id in claims]
+            with self.storage.claims_storage_lock:
+                claims = self.storage.get_claims_signed_by(certificate_id)
+                return [self.get_claim_info(claim_id) for claim_id in claims]
 
     @command('blockchain.claimtrie.getclaimssignedbynthtoname')
     def cmd_claimtrie_getclaimssignedbynthtoname(self, name, n):
         name = str(name)
         n = int(n)
-        certificate_id = self.storage.get_claimid_for_nth_claim_to_name(name, n)
-        if certificate_id:
-            claims = self.storage.get_claims_signed_by(certificate_id)
-            return [self.get_claim_info(claim_id) for claim_id in claims]
+        with self.storage.claims_storage_lock:
+            certificate_id = self.storage.get_claimid_for_nth_claim_to_name(name, n)
+            if certificate_id:
+                claims = self.storage.get_claims_signed_by(certificate_id)
+                return [self.get_claim_info(claim_id) for claim_id in claims]

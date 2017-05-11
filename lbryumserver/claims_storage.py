@@ -4,6 +4,7 @@ functions to manipulate the claim information
 """
 
 import pickle
+import threading
 
 from lbryschema.decode import smart_decode
 from lbryschema.error import DecodeError, URIParseError, CertificateError
@@ -17,6 +18,7 @@ from lbryumserver.utils import int_to_hex,hex_to_int
 class ClaimsStorage(Storage):
     def __init__(self, config, shared, test_reorgs):
         Storage.__init__(self, config, shared, test_reorgs)
+        self.claims_storage_lock = threading.Lock()
 
     def get_claimid_for_nth_claim_to_name(self, name, n):
         claims = self.db_claim_order.get(name)
@@ -56,14 +58,16 @@ class ClaimsStorage(Storage):
     def write_outpoint_from_claim_id(self, claim_id, txid, nout, amount):
         txid_nout_amount = txid+int_to_hex(nout, 4)+int_to_hex(amount,8)
         self.db_claim_outpoint.put(claim_id, txid_nout_amount)
-
+    
     def get_claims_for_name(self, name):
+        # returns dict {claim_id:claim_sequence,}
         claims = self.db_claim_order.get(name)
         if claims is None:
             return {}
         return pickle.loads(claims)
 
     def write_claims_for_name(self, name, claims):
+        # claims is a dict  {claim_id:claim_sequence, }
         if len(claims) == 0:
             self.db_claim_order.delete(name)
         else:
