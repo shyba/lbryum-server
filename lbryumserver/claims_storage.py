@@ -251,9 +251,13 @@ class ClaimsStorage(Storage):
                 self.import_abandon(claim_info['txid'], claim_info['nout']))
 
         for c in out['claims']:
-            if type(c['claim']) in [deserialize.NameClaim, deserialize.ClaimUpdate]:
+            if type(c['claim']) == deserialize.NameClaim:
                 undo_infos.append(
                     self.import_claim(c['claim'], c['claim_id'], c['claim_address'],
+                                  txid, c['nout'], c['amount'], block_height))
+            elif type(c['claim']) == deserialize.ClaimUpdate:
+                undo_infos.append(
+                    self.import_update(c['claim'], c['claim_id'], c['claim_address'],
                                   txid, c['nout'], c['amount'], block_height))
             else: #support
                 pass
@@ -264,13 +268,7 @@ class ClaimsStorage(Storage):
     def import_claim(self, claim, claim_id, claim_address, txid, nout, amount, block_height):
         logger.info("importing claim {}, claim id:{}, txid:{}, nout:{} ".format(claim, claim_id, txid, nout))
 
-        is_update = type(claim) == deserialize.ClaimUpdate
-        if is_update:
-            claim_type = 'update'
-        else:
-            claim_type = 'claim'
-
-        undo_info = self._get_undo_info(claim_type, claim_id, claim.name)
+        undo_info = self._get_undo_info('claim', claim_id, claim.name)
 
         claims_for_name = self.get_claims_for_name(claim.name)
         if not claims_for_name:
@@ -289,6 +287,22 @@ class ClaimsStorage(Storage):
 
         undo_info = self.import_signed_claim(claim, claim_id, undo_info)
         return undo_info
+
+
+    def import_update(self, claim, claim_id, claim_address, txid, nout, amount, block_height):
+        logger.info("importing update {}, claim id:{}, txid:{}, nout:{} ".format(claim, claim_id, txid, nout))
+
+        undo_info = self._get_undo_info('update', claim_id, claim.name)
+
+        self.write_outpoint_from_claim_id(claim_id, txid, nout, amount)
+        self.db_claim_values.put(claim_id, claim.value)
+        self.db_claim_height.put(claim_id, str(block_height))
+        self.db_claim_addrs.put(claim_id, claim_address)
+
+        undo_info = self.import_signed_claim(claim, claim_id, undo_info)
+        return undo_info
+
+
 
     def import_abandon(self, txid, nout):
         """ handle abandoned claims """
@@ -310,9 +324,8 @@ class ClaimsStorage(Storage):
         del claims_for_name[claim_id]
 
         for cid,cn in claims_for_name.iteritems():
-            if cn > n:
+            if cn > claim_n:
                 claims_for_name[cid] = cn-1
-
 
         self.db_claim_order.delete(claim_name)
         self.db_claim_order.put(claim_name, pickle.dumps(claims_for_name))
@@ -345,7 +358,7 @@ class ClaimsStorage(Storage):
         return undo_info
 
     def import_signed_claim(self, claim, claim_id, undo_info):
-        """ handle the import of claims signed """
+        """ handle the import of claims/updates signed """
         try:
             decoded_claim = smart_decode(claim.value)
             parsed_uri = parse_lbry_uri(claim.name)
