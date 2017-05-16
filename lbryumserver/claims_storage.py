@@ -6,13 +6,14 @@ functions to manipulate the claim information
 import pickle
 
 from lbryschema.decode import smart_decode
-from lbryschema.error import DecodeError, URIParseError, CertificateError
+from lbryschema.error import DecodeError, URIParseError
 from lbryschema.uri import parse_lbry_uri
 
 from lbryumserver import deserialize
 from lbryumserver.storage import Storage
 from lbryumserver.processor import logger
-from lbryumserver.utils import int_to_hex,hex_to_int
+from lbryumserver.utils import int_to_hex, hex_to_int, print_log
+
 
 class ClaimsStorage(Storage):
     def __init__(self, config, shared, test_reorgs):
@@ -40,7 +41,7 @@ class ClaimsStorage(Storage):
         for claim_id, txid_nout_amount in self.db_claim_outpoint.db.iterator():
             c_txid = txid_nout_amount[0:64]
             c_nout = hex_to_int(txid_nout_amount[64:72].decode('hex'))
-            logger.warn('get_claim_id_from_outpoint:{}:{}, {}:{}'.format(txid,nout,c_txid,c_nout))
+            logger.debug('get_claim_id_from_outpoint:{}:{}, {}:{}'.format(txid,nout,c_txid,c_nout))
             if txid == c_txid and nout == c_nout:
                 return claim_id
 
@@ -96,7 +97,6 @@ class ClaimsStorage(Storage):
     def get_claim_name(self, claim_id):
         return self.db_claim_names.get(claim_id)
 
-
     def get_undo_claim_info(self, height):
         s = self.db_undo_claim.get("undo_info_%d"%(height%100))
         if s is None:
@@ -108,13 +108,11 @@ class ClaimsStorage(Storage):
         if height > lbrycrdd_height - 100 or self.test_reorgs:
             self.db_undo_claim.put("undo_info_%d" % (height % 100), pickle.dumps(undo_info))
 
-
     def _get_claim_id(self, txid, nout):
         """ get claim id in hex from txid in hex and nout int """
         claim_id = deserialize.claim_id_hash(deserialize.rev_hex(txid).decode('hex'),nout)
         claim_id = deserialize.claim_id_bytes_to_hex(claim_id)
         return claim_id
-
 
     def _get_undo_info(self, claim_type, claim_id, claim_name):
         undo_info={"claim_id":claim_id,"claim_type":claim_type,"claim_name":claim_name}
@@ -242,7 +240,6 @@ class ClaimsStorage(Storage):
 
         return {'abandons':abandons,'claims':list_claims,}
 
-
     def import_claim_transaction(self, txid, tx, block_height):
         out = self._analyze_tx(txid, tx)
         undo_infos =[]
@@ -266,7 +263,7 @@ class ClaimsStorage(Storage):
         return undo_infos
 
     def import_claim(self, claim, claim_id, claim_address, txid, nout, amount, block_height):
-        logger.info("importing claim {}, claim id:{}, txid:{}, nout:{} ".format(claim, claim_id, txid, nout))
+        logger.info("importing claim {}, claim id:{}, txid:{}, nout:{} ".format(claim.name, claim_id, txid, nout))
 
         undo_info = self._get_undo_info('claim', claim_id, claim.name)
 
@@ -288,9 +285,8 @@ class ClaimsStorage(Storage):
         undo_info = self.import_signed_claim(claim, claim_id, undo_info)
         return undo_info
 
-
     def import_update(self, claim, claim_id, claim_address, txid, nout, amount, block_height):
-        logger.info("importing update {}, claim id:{}, txid:{}, nout:{} ".format(claim, claim_id, txid, nout))
+        logger.info("importing update {}, claim id:{}, txid:{}, nout:{} ".format(claim.name, claim_id, txid, nout))
 
         undo_info = self._get_undo_info('update', claim_id, claim.name)
 
@@ -301,8 +297,6 @@ class ClaimsStorage(Storage):
 
         undo_info = self.import_signed_claim(claim, claim_id, undo_info)
         return undo_info
-
-
 
     def import_abandon(self, txid, nout):
         """ handle abandoned claims """
@@ -333,7 +327,6 @@ class ClaimsStorage(Storage):
         undo_info = self.import_signed_claim_abandon(claim_id, undo_info)
         return undo_info
 
-
     def _get_signed_claim_undo_info(self, claim_type, undo_info, cert_id, prev_cert_id=None):
         """ add to undo_info signed claim related undo information """
 
@@ -341,10 +334,10 @@ class ClaimsStorage(Storage):
             claims = self.get_claims_signed_by(cert_id)
             undo_info['cert_to_claims'] = (cert_id,claims)
         elif claim_type == 'update':
-            if prev_cert_id != cert_id:
+            if prev_cert_id and prev_cert_id != cert_id:
                 prev_claims = self.get_claims_signed_by(prev_cert_id)
                 claims = self.get_claims_signed_by(cert_id)
-                undo_info['prev_cert_to_claims'] = (prev_cert_id,prev_claims)
+                undo_info['prev_cert_to_claims'] = (prev_cert_id, prev_claims)
                 undo_info['cert_to_claims'] = (cert_id,claims)
                 undo_info['claim_to_cert'] = prev_cert_id
 
@@ -375,12 +368,12 @@ class ClaimsStorage(Storage):
         prev_cert_id = None
         claim_type = 'claim'
         if type(claim) == deserialize.ClaimUpdate:
-            prev_cert_id  = self.db_claim_to_cert(claim_id)
+            prev_cert_id = self.db_claim_to_cert.get(claim_id)
             claim_type = 'update'
         undo_info = self._get_signed_claim_undo_info(claim_type, undo_info, cert_id, prev_cert_id)
 
         if claim_type == 'update':
-            if prev_cert_id != cert_id:
+            if prev_cert_id and prev_cert_id != cert_id:
                 prev_claims = self.get_claims_signed_by(prev_cert_id)
                 prev_claims.remove(claim_id)
                 self.write_claims_signed_by(prev_cert_id, prev_claims)
@@ -389,7 +382,7 @@ class ClaimsStorage(Storage):
                 claims.append(claim_id)
                 self.write_claims_signed_by(cert_id,claims)
 
-                self.db_claim_to_cert.put(clam_id, cert_id)
+                self.db_claim_to_cert.put(claim_id, cert_id)
         elif claim_type == 'claim':
             self.db_claim_to_cert.put(claim_id, cert_id)
             claims = self.get_claims_signed_by(cert_id)
