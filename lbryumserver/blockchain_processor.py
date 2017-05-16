@@ -981,16 +981,17 @@ class BlockchainProcessor(BlockchainProcessorBase):
             transaction_height = self.lbrycrdd_height - transaction_info['confirmations']
             result['transaction'] = transaction
             claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
-            result['claim_id'] = claim_id
-            claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
-            result['claim_sequence'] = claim_sequence
             result['height'] = transaction_height + 1
 
         claim_info = self.lbrycrdd('getclaimsforname', (name,))
         supports = []
         if len(claim_info['claims']) > 0:
             for claim in claim_info['claims']:
-                if claim['claimId'] == claim_id:
+                if claim['txid'] == txid and claim['n'] == nout:
+                    claim_id = claim['claimId']
+                    result['claim_id'] = claim_id
+                    claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
+                    result['claim_sequence'] = claim_sequence
                     supports = claim['supports']
                     break
         result['supports'] = [[support['txid'], support['n'], support['nAmount']] for support in
