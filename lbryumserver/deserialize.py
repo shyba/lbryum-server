@@ -340,7 +340,8 @@ class NameClaim(object):
     def __init__(self, name, value):
         self.name = name
         self.value = value
-
+    def __repr__(self):
+        return "NameClaim, name:{}, value:{}".format(self.name,self.value)
 
 class ClaimUpdate(object):
     def __init__(self, name, claim_id, value):
@@ -348,12 +349,15 @@ class ClaimUpdate(object):
         self.claim_id = claim_id
         self.value = value
 
-
+    def __repr__(self):
+        return "ClaimUpdate, name:{}, claim_id:{}, value:{}".format(self.name, self.claim_id, self.value)
 class ClaimSupport(object):
     def __init__(self, name, claim_id):
         self.name = name
         self.claim_id = claim_id
 
+    def __repr__(self):
+        return "ClaimSupport, name:{}, claim_id:{}".format(self.name, self.claim_id)
 
 def decode_claim_script(decoded_script):
     if len(decoded_script) <= 6:

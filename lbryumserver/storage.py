@@ -7,6 +7,7 @@ import ast
 import os
 import threading
 import json
+import pickle
 
 from ecdsa.keys import BadSignatureError
 
@@ -187,25 +188,30 @@ class Storage(object):
             self.db_addr = DB(self.dbpath, 'addr', config.getint('leveldb', 'addr_cache'))
             # key = undo id, valude = undo info
             self.db_undo = DB(self.dbpath, 'undo', None)
-            # key = claim id hex, value = txid hex sting + nout
-            self.db_claimid = DB(self.dbpath, 'claimid', config.getint('leveldb', 'claimid_cache'))
-            # key = claim id hex, value = undo info
+
+            """ Below databases are for storing claim information """
+
+            # key = undo id, value = undo info
             self.db_undo_claim = DB(self.dbpath, 'undo_claim', 256 * 1024 * 1024)
+            # key = claim id hex, value = txid hex sting + nout + amount
+            self.db_claim_outpoint = DB(self.dbpath, 'claim_outpoint', config.getint('leveldb', 'claimid_cache'))
+            # key = claim id hex, value = claim name
+            self.db_claim_names = DB(self.dbpath, 'claim_names', 64 * 1024 * 1024)
             # key = claim id hex, value = claim value
             self.db_claim_values = DB(self.dbpath, 'claim_values',
                                       config.getint('leveldb', 'claim_value_cache'))
             # key = claim id hex, value = claim height
             self.db_claim_height = DB(self.dbpath, 'claim_height', 4 * 1024 * 1024)
-            # key = claim id hex, value = claim name
-            self.db_claim_names = DB(self.dbpath, 'claim_names', 64 * 1024 * 1024)
-            # key = claim name, value = {claim_id:claim_sequence,}
-            self.db_claim_order = DB(self.dbpath, 'claim_order', 4 * 1024 * 1024)
-            # key = claim id, value = claim value
-            self.db_certificate_claims = DB(self.dbpath, 'certificate_claim', 128 * 1024 * 1024)
-            # key = claim_id hex, value = certificate id
-            self.db_signed_claims = DB(self.dbpath, 'signed_claims', 256 * 1024 * 1024)
             # key = claim id hex, value = address
             self.db_claim_addrs = DB(self.dbpath, 'claim_addresses', 64 * 1024 * 1024)
+
+            # key = claim name, value = {claim_id:claim_sequence,}
+            self.db_claim_order = DB(self.dbpath, 'claim_order', 4 * 1024 * 1024)
+            # key = certificate claim_id hex, value = [claim_id,]
+            self.db_cert_to_claims = DB(self.dbpath, 'cert_to_claims', 256 * 1024 * 1024)
+            # key = claim id, value = certifcate claim id
+            self.db_claim_to_cert = DB(self.dbpath, 'claims_to_cert', 8 * 1024 * 1024)
+
         except:
             logger.error('db init', exc_info=True)
             self.shared.stop()
@@ -319,43 +325,22 @@ class Storage(object):
         out = sorted(out)
         return map(lambda x: {'height': x[0], 'tx_hash': x[1]}, out)
 
-    def get_claim_value(self, claim_id):
-        return self.db_claim_values.get(claim_id)
 
-    def get_claim_height(self, claim_id):
-        height = self.db_claim_height.get(claim_id)
-        if height is not None:
-            return int(height)
-
-    def get_claim_address(self, claim_id):
-        return self.db_claim_addrs.get(claim_id)
-
-    def get_claim_name(self, claim_id):
-        return self.db_claim_names.get(claim_id)
 
     def get_address(self, txi):
         return self.db_addr.get(txi)
 
-    def get_undo_claim_info(self, claim_id):
-        s = self.db_undo_claim.get(claim_id)
-        if s is None:
-            print_log('no undo info for {}'.format(claim_id))
-
-        return eval(s)
-
-    def write_undo_claim_info(self, height, lbrycrdd_height, claim_id, undo_info):
-        if height > lbrycrdd_height - 100 or self.test_reorgs:
-            self.db_undo_claim.put(claim_id, repr(undo_info))
 
     def get_undo_info(self, height):
         s = self.db_undo.get("undo_info_%d" % (height % 100))
         if s is None:
             print_log("no undo info for ", height)
-        return eval(s)
+            return None
+        return pickle.loads(s)
 
     def write_undo_info(self, height, lbrycrdd_height, undo_info):
         if height > lbrycrdd_height - 100 or self.test_reorgs:
-            self.db_undo.put("undo_info_%d" % (height % 100), repr(undo_info))
+            self.db_undo.put("undo_info_%d" % (height % 100), pickle.dumps(undo_info))
 
     @staticmethod
     def common_prefix(word1, word2):
@@ -382,7 +367,7 @@ class Storage(object):
         path = self.get_path(target, new=True)
         if path is True:
             return
-        # print "add key: target", target.encode('hex'), "path", map(lambda x: x.encode('hex'), path)
+        #print_log("add key: target", target.encode('hex'), "path", map(lambda x: x.encode('hex'), path))
         parent = path[-1]
         parent_node = self.get_node(parent)
         n = len(parent)
@@ -522,7 +507,7 @@ class Storage(object):
 
     def delete_key(self, leaf):
         path = self.get_path(leaf)
-        # print "delete key", leaf.encode('hex'), map(lambda x: x.encode('hex'), path)
+        #print_log("delete key", leaf.encode('hex'), map(lambda x: x.encode('hex'), path))
 
         s = self.db_utxo.get(leaf)
         self.db_utxo.delete(leaf)
@@ -536,7 +521,7 @@ class Storage(object):
         parent_node.remove(letter)
 
         # remove key if it has a single child
-        if parent_node.is_singleton(parent):
+        if parent_node.is_singleton(parent) and parent != '':
             # print "deleting parent", parent.encode('hex')
             self.db_utxo.delete(parent)
             if parent in self.hash_list:
@@ -546,7 +531,6 @@ class Storage(object):
             _hash, value = parent_node.get(l)
             skip = self.get_skip(parent + l)
             otherleaf = parent + l + skip
-            # update skip value in grand-parent
             gp = path[-2]
             gp_items = self.get_node(gp)
             letter = otherleaf[len(gp)]
@@ -578,16 +562,16 @@ class Storage(object):
         return self.root_hash if self.root_hash else ''
 
     def batch_write(self):
-        for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claimid,
+        for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claim_outpoint,
                    self.db_claim_values, self.db_claim_height, self.db_claim_names,
-                   self.db_claim_order, self.db_certificate_claims, self.db_signed_claims,
+                   self.db_claim_order, self.db_cert_to_claims, self.db_claim_to_cert,
                    self.db_claim_addrs]:
             db.write()
 
     def close(self):
-        for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claimid,
+        for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claim_outpoint,
                    self.db_claim_values, self.db_claim_height, self.db_claim_names,
-                   self.db_claim_order, self.db_certificate_claims, self.db_signed_claims,
+                   self.db_claim_order, self.db_cert_to_claims, self.db_claim_to_cert,
                    self.db_claim_addrs]:
             db.close()
 
@@ -653,206 +637,6 @@ class Storage(object):
         assert s[-80:-44] == txi
         s = s[:-80]
         self.db_hist.put(addr, s)
-
-    # get claim id in hex from txid in hex and nout int
-    def _get_claim_id(self, txid, nout):
-        claim_id = deserialize.claim_id_hash(deserialize.rev_hex(txid).decode('hex'),nout)
-        claim_id = deserialize.claim_id_bytes_to_hex(claim_id)
-        return claim_id
-
-    # get claim id from db from claim outpoint
-    def get_claim_id_from_outpoint(self, txid, nout):
-        txid_nout = txid + int_to_hex(nout, 4)
-        for claim_id, tx in self.db_claimid.db:
-            if txid_nout == tx:
-                return claim_id
-
-    def get_claimid_for_nth_claim_to_name(self, name, n):
-        claims = self.db_claim_order.get(name)
-        if claims is None:
-            return None
-        for claim_id, i in json.loads(claims).iteritems():
-            if i == n:
-                return claim_id
-
-    def get_n_for_name_and_claimid(self, name, claim_id):
-        claims = self.db_claim_order.get(name)
-        if claims is None:
-            return None
-        for id, n in json.loads(claims).iteritems():
-            if id == claim_id:
-                return n
-
-    def get_txid_nout_from_claim_id(self, claim_id):
-        txid_nout = self.db_claimid.get(claim_id)
-        if txid_nout is None:
-            return None
-        txid = txid_nout[0:64]
-        nout = hex_to_int(txid_nout[64:72].decode('hex'))
-        return txid, nout
-
-    def _iter_claims_signed_by(self, certificate_id):
-        for claim_id, cert_id in self.db_signed_claims.db:
-            if certificate_id == cert_id:
-                yield claim_id
-
-    def get_claims_signed_by(self, certificate_id):
-        return list(self._iter_claims_signed_by(certificate_id))
-
-    def update_channel_validations(self, claim, claim_id):
-        claim_address = self.db_claim_addrs.get(claim_id)
-        try:
-            decoded_claim = smart_decode(claim.value)
-            parsed_uri = parse_lbry_uri(claim.name)
-        except DecodeError:
-            print_log("decode error in update for lbry://{}#{}".format(claim.name, claim_id))
-            self.remove_claim(claim_id, delete_claim_data=False)
-            return
-        except URIParseError:
-            print_log("uri parse error for lbry://{}#{}".format(claim.name, claim_id))
-            self.remove_claim(claim_id, delete_claim_data=False)
-            return
-
-        if parsed_uri.is_channel and decoded_claim.is_certificate:
-            if self.db_certificate_claims.get(claim_id):
-                print_log("reindexing lbry://{}#{}".format(claim.name, claim_id))
-                self.db_certificate_claims.delete(claim_id)
-            else:
-                print_log("adding channel lbry://{}#{}".format(claim.name, claim_id))
-            self.db_certificate_claims.put(claim_id, claim.value)
-
-            for claim_id_to_check in self.get_claims_signed_by(claim_id):
-                address_to_check = self.db_claim_addrs.get(claim_id)
-                name = self.get_claim_name(claim_id_to_check)
-                decoded_claim_to_check = smart_decode(self.db_claim_values.get(claim_id_to_check))
-                try:
-                    is_valid = decoded_claim_to_check.validate_signature(address_to_check,
-                                                                         decoded_claim)
-                    if is_valid:
-                        self.db_signed_claims.delete(claim_id_to_check)
-                        self.db_signed_claims.put(claim_id_to_check, claim_id)
-                        print_log("validated lbry://{}#{}/{}".format(claim.name,
-                                                                     decoded_claim.certificate_id,
-                                                                     name))
-                    else:
-                        raise BadSignatureError()
-                except BadSignatureError:
-                    print_log("revoked lbry://{}#{}/{}".format(claim.name, claim_id, name))
-                    self.db_signed_claims.delete(claim_id_to_check)
-        elif decoded_claim.has_signature:
-            raw_certificate = self.db_certificate_claims.get(decoded_claim.certificate_id)
-            if not raw_certificate:
-                print_log("certificate error, revoking lbry://{}#{}".format(claim.name, claim_id))
-                self.db_signed_claims.delete(claim_id)
-            elif decoded_claim.has_signature:
-                certificate = smart_decode(raw_certificate)
-                channel_name = self.get_claim_name(decoded_claim.certificate_id)
-                try:
-                    is_valid = decoded_claim.validate_signature(claim_address, certificate)
-                except BadSignatureError:
-                    is_valid = False
-                if is_valid:
-                    print_log("validated lbry://{}#{}/{}".format(channel_name,
-                                                                 decoded_claim.certificate_id,
-                                                                 claim.name))
-                    self.db_signed_claims.put(claim_id, decoded_claim.certificate_id)
-                else:
-                    print_log("revoked lbry://{}#{}/{}".format(channel_name,
-                                                               decoded_claim.certificate_id,
-                                                               claim.name))
-                    self.db_signed_claims.delete(claim_id)
-        elif self.db_signed_claims.get(claim_id):
-            print_log("update to lbry://{}#{} is missing a signature, invalidating".format(claim.name, claim_id))
-            self.db_signed_claims.delete(claim_id)
-        elif self.db_certificate_claims.get(claim_id):
-            print_log("update to lbry://{}#{} no longer contains a certificate, removing the channel".format(claim.name, claim_id))
-            for channel_claim_id in self.get_claims_signed_by(claim_id):
-                name = self.get_claim_name(channel_claim_id)
-                print_log("invalidated lbry://{}#{}/{}".format(claim.name, claim_id, name))
-                self.db_signed_claims.delete(channel_claim_id)
-            self.db_certificate_claims.delete(claim_id)
-
-    def import_claim(self, claim, txid, nout, block_height, claim_address):
-        txid_nout = txid+int_to_hex(nout, 4)
-        is_update = type(claim) == deserialize.ClaimUpdate
-
-        if type(claim) not in [deserialize.NameClaim, deserialize.ClaimUpdate]:
-            raise Exception("No claim given to import")
-        if is_update:
-            claim_id = deserialize.claim_id_bytes_to_hex(claim.claim_id)
-            print_log("importing update to %s#%s" % (claim.name, claim_id))
-        else:
-            claim_id = self._get_claim_id(txid, nout)
-            print_log("importing claim %s#%s" % (claim.name, claim_id))
-
-        claims_in_db = self.db_claim_order.get(claim.name)
-        claims_for_name = {} if not claims_in_db else json.loads(claims_in_db)
-        if not claims_for_name:
-            claim_n = 1
-        else:
-            claim_n = max(i for i in claims_for_name.itervalues()) + 1
-
-        claims_for_name[claim_id] = claim_n
-        self.db_claim_order.delete(claim.name)
-        self.db_claim_order.put(claim.name, json.dumps(claims_for_name))
-
-        self.db_claimid.put(claim_id, txid_nout)
-        self.db_claim_names.put(claim_id, claim.name)
-        self.db_claim_values.put(claim_id, claim.value)
-        self.db_claim_height.put(claim_id, str(block_height))
-        self.db_claim_addrs.put(claim_id, claim_address)
-
-        self.update_channel_validations(claim, claim_id)
-
-    def remove_claim(self, claim_id, delete_claim_data=True):
-        name = self.get_claim_name(claim_id)
-        if delete_claim_data:
-            print_log("remove %s#%s" % (name, claim_id))
-            self.db_claimid.delete(claim_id)
-            self.db_claim_values.delete(claim_id)
-            self.db_claim_height.delete(claim_id)
-            self.db_claim_addrs.delete(claim_id)
-            self.db_claim_names.delete(claim_id)
-            self.batch_write()
-        else:
-            print_log("found non channel claim %s#%s" % (name, claim_id))
-
-        if self.db_certificate_claims.get(claim_id):
-            claims_signed_by_this_cert = self.get_claims_signed_by(claim_id)
-            for revoked_signed_claim in claims_signed_by_this_cert:
-                print_log("revoke %s#%s/%s" % (name, claim_id, self.get_claim_name(revoked_signed_claim)))
-                self.db_signed_claims.delete(revoked_signed_claim)
-            self.db_certificate_claims.delete(claim_id)
-        elif self.db_signed_claims.get(claim_id):
-            self.db_signed_claims.delete(claim_id)
-
-    def revert_claim(self, claim, txid, nout, undo_claim=None):
-        if type(claim) == deserialize.NameClaim:
-            claim_id = self._get_claim_id(txid, nout)
-            self.db_claimid.delete(claim_id)
-            self.db_claim_values.delete(claim_id)
-            self.db_claim_height.delete(claim_id)
-            print_log('Removing name claim {}'.format(claim_id))
-        elif type(claim) == deserialize.ClaimUpdate:
-            if not isinstance(undo_claim, dict):
-                print_log("Not given a value to revert claim to")
-
-            prev_txid_nout = undo_claim.pop('prev_txid_nout')
-            prev_claim_height = undo_claim.pop('prev_claim_height')
-            prev_claim_value = undo_claim.pop('prev_claim_value')
-
-            # delete the update and put the original claim back in
-            claim_id = deserialize.claim_id_bytes_to_hex(claim.claim_id)
-            self.db_claimid.delete(claim_id)
-            self.db_claim_values.delete(claim_id)
-            self.db_claim_height.delete(claim_id)
-
-            self.db_claimid.put(claim_id, prev_txid_nout)
-            self.db_claim_height.put(claim_id, prev_claim_height)
-            self.db_claim_values.put(claim_id, prev_claim_value)
-            print_log('Reverting update for claim {} to {}'.format(claim_id, prev_txid_nout))
-
-        assert undo_claim == {}
 
     def import_transaction(self, txid, tx, block_height, touched_addr):
         undo = {

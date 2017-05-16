@@ -11,7 +11,7 @@ from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 
 from lbryumserver import deserialize
 from lbryumserver.processor import Processor, print_log
-from lbryumserver.storage import Storage
+from lbryumserver.claims_storage import ClaimsStorage
 from lbryumserver.utils import logger, hash_decode, hash_encode, Hash, header_from_string
 from lbryumserver.utils import header_to_string, ProfiledThread, rev_hex, int_to_hex, PoWHash
 
@@ -64,7 +64,7 @@ class BlockchainProcessorBase(Processor):
             self.test_reorgs = config.getboolean('leveldb', 'test_reorgs')  # simulate random blockchain reorgs
         except:
             self.test_reorgs = False
-        self.storage = Storage(config, shared, self.test_reorgs)
+        self.storage = ClaimsStorage(config, shared, self.test_reorgs)
 
         self.lbrycrdd_url = 'http://%s:%s@%s:%s/' % (
             config.get('lbrycrdd', 'lbrycrdd_user'),
@@ -419,7 +419,7 @@ class BlockchainProcessorBase(Processor):
             elif revert:
                 self.storage.revert_claim(claim, txid, nout)
             else:
-                undo_claim_info = self.storage.import_claim(claim, txid, nout,
+                undo_claim_info = self.storage.import_claim(claim, txid, nout, amount,
                                                             block_height, claim_address)
                 self.storage.write_undo_claim_info(block_height, self.lbrycrdd_height,
                                                    claim_id, undo_claim_info)
@@ -456,46 +456,33 @@ class BlockchainProcessorBase(Processor):
         # undo info
         if revert:
             undo_info = self.storage.get_undo_info(block_height)
+            claim_undo_info = self.storage.get_undo_claim_info(block_height)
             tx_hashes.reverse()
         else:
             undo_info = {}
-
+            claim_undo_info = {}
         for txid in tx_hashes:  # must be ordered
             tx = txdict[txid]
             if not revert:
                 undo = self.storage.import_transaction(txid, tx, block_height, touched_addr)
                 undo_info[txid] = undo
+
+                undo = self.storage.import_claim_transaction(txid, tx, block_height)
+                claim_undo_info[txid] = undo
             else:
                 undo = undo_info.pop(txid)
                 self.storage.revert_transaction(txid, tx, block_height, touched_addr, undo)
-
-            imported_claim = False
-
-            for x in tx.get('outputs'):
-                script = x.get('raw_output_script').decode('hex')
-                nout = x.get('index')
-                decoded_script = [s for s in deserialize.script_GetOp(script)]
-                out = deserialize.decode_claim_script(decoded_script)
-                if out is not False:
-                    claim, claim_script = out
-                    if self._is_valid_claim(claim, tx):
-                        self.import_claim_transaction(claim, script, txid, nout, block_height, revert)
-                        imported_claim = True
-
-            if not imported_claim:
-                # if there wasn't an update, make sure the tx didn't spend a claim
-                for x in tx.get('inputs'):
-                    txid, nout = x['prevout_hash'], x['prevout_n']
-                    claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
-                    if claim_id:
-                        self.storage.remove_claim(claim_id)
+                undo = claim_undo_info.pop(txid)
+                self.storage.revert_claim_transaction(undo)
 
         if revert:
+            assert claim_undo_info == {}
             assert undo_info == {}
 
         # add undo info
         if not revert:
             self.storage.write_undo_info(block_height, self.lbrycrdd_height, undo_info)
+            self.storage.write_undo_claim_info(block_height, self.lbrycrdd_height, claim_undo_info)
 
         # add the max
         self.storage.save_height(block_hash, block_height)
@@ -532,9 +519,10 @@ class BlockchainProcessorBase(Processor):
 
     def get_claim_info(self, claim_id):
         result = {}
+        logger.warn("get_claim_info claim_id:{}".format(claim_id))
         claim_name = self.storage.get_claim_name(claim_id)
         claim_value = self.storage.get_claim_value(claim_id)
-        claim_out = self.storage.get_txid_nout_from_claim_id(claim_id)
+        claim_out = self.storage.get_outpoint_from_claim_id(claim_id)
         claim_height = self.storage.get_claim_height(claim_id)
         claim_address = self.storage.get_claim_address(claim_id)
         if claim_name and claim_id:
@@ -542,20 +530,20 @@ class BlockchainProcessorBase(Processor):
         else:
             claim_sequence = None
         if None not in (claim_name, claim_value, claim_out, claim_height, claim_sequence):
-            claim_txid, claim_nout = claim_out
+            claim_txid, claim_nout, claim_amount = claim_out
             claim_value = claim_value.encode('hex')
             result = {
                 "name": claim_name,
                 "claim_id": claim_id,
                 "txid": claim_txid,
                 "nout": claim_nout,
+                "amount":claim_amount,
                 "depth": self.lbrycrdd_height - claim_height,
                 "height": claim_height,
                 "value": claim_value,
                 "claim_sequence": claim_sequence,
                 "address": claim_address
             }
-
             lbrycrdd_results = self.lbrycrdd("getclaimsforname", (claim_name, ))
             lbrycrdd_claim = None
             if lbrycrdd_results:
@@ -566,7 +554,6 @@ class BlockchainProcessorBase(Processor):
                 if lbrycrdd_claim:
                     result['supports'] = [[support['txid'], support['n'], support['nAmount']] for
                                           support in lbrycrdd_claim['supports']]
-                    result['amount'] = lbrycrdd_claim['nAmount']
                     result['effective_amount'] = lbrycrdd_claim['nEffectiveAmount']
                     result['valid_at_height'] = lbrycrdd_claim['nValidAtHeight']
 
@@ -994,16 +981,17 @@ class BlockchainProcessor(BlockchainProcessorBase):
             transaction_height = self.lbrycrdd_height - transaction_info['confirmations']
             result['transaction'] = transaction
             claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
-            result['claim_id'] = claim_id
-            claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
-            result['claim_sequence'] = claim_sequence
             result['height'] = transaction_height + 1
 
         claim_info = self.lbrycrdd('getclaimsforname', (name,))
         supports = []
         if len(claim_info['claims']) > 0:
             for claim in claim_info['claims']:
-                if claim['claimId'] == claim_id:
+                if claim['txid'] == txid and claim['n'] == nout:
+                    claim_id = claim['claimId']
+                    result['claim_id'] = claim_id
+                    claim_sequence = self.storage.get_n_for_name_and_claimid(str(name), claim_id)
+                    result['claim_sequence'] = claim_sequence
                     supports = claim['supports']
                     break
         result['supports'] = [[support['txid'], support['n'], support['nAmount']] for support in
@@ -1062,7 +1050,7 @@ class BlockchainProcessor(BlockchainProcessorBase):
         name = str(name)
         winning_claim = self.lbrycrdd('getvalueforname', (name,))
         if winning_claim:
-            certificate_id = winning_claim['claimId']
+            certificate_id = str(winning_claim['claimId'])
             claims = self.storage.get_claims_signed_by(certificate_id)
             return [self.get_claim_info(claim_id) for claim_id in claims]
 
