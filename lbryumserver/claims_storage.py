@@ -163,14 +163,18 @@ class ClaimsStorage(Storage):
                 self.db_claim_addrs.put(claim_id, undo_info['claim_addrs'])
                 self.db_claim_order.put(claim_name, undo_info['claim_order'])
 
+                # updated to signed claim
                 if 'cert_to_claims' in undo_info:
                     cert_id = undo_info['cert_to_claims'][0]
                     claims = undo_info['cert_to_claims'][1]
                     self.write_claims_signed_by(cert_id, claims)
+                    self.db_claim_to_cert.delete(claim_id)
+                # updated from signed claim
+                if 'prev_cert_to_claims' in undo_info:
                     prev_cert_id = undo_info['prev_cert_to_claims'][0]
                     prev_claims = undo_info['prev_cert_to_claims'][1]
                     self.write_claims_signed_by(prev_cert_id,prev_claims)
-                    self.db_claim_to_cert.put(claim_id,undo_info['claim_to_cert'])
+                    self.db_claim_to_cert.put(claim_id, undo_info['claim_to_cert'])
 
             elif claim_type == 'claim':
                 self.db_claim_outpoint.delete(claim_id)
@@ -282,7 +286,7 @@ class ClaimsStorage(Storage):
         self.db_claim_height.put(claim_id, str(block_height))
         self.db_claim_addrs.put(claim_id, claim_address)
 
-        undo_info = self.import_signed_claim(claim, claim_id, undo_info)
+        undo_info = self.import_signed_claim_transaction(claim, claim_id, undo_info)
         return undo_info
 
     def import_update(self, claim, claim_id, claim_address, txid, nout, amount, block_height):
@@ -295,7 +299,7 @@ class ClaimsStorage(Storage):
         self.db_claim_height.put(claim_id, str(block_height))
         self.db_claim_addrs.put(claim_id, claim_address)
 
-        undo_info = self.import_signed_claim(claim, claim_id, undo_info)
+        undo_info = self.import_signed_claim_transaction(claim, claim_id, undo_info)
         return undo_info
 
     def import_abandon(self, txid, nout):
@@ -324,22 +328,24 @@ class ClaimsStorage(Storage):
         self.db_claim_order.delete(claim_name)
         self.db_claim_order.put(claim_name, pickle.dumps(claims_for_name))
 
-        undo_info = self.import_signed_claim_abandon(claim_id, undo_info)
+        undo_info = self.import_signed_abandon(claim_id, undo_info)
         return undo_info
 
     def _get_signed_claim_undo_info(self, claim_type, undo_info, cert_id, prev_cert_id=None):
         """ add to undo_info signed claim related undo information """
 
         if claim_type == 'claim':
-            claims = self.get_claims_signed_by(cert_id)
-            undo_info['cert_to_claims'] = (cert_id,claims)
-        elif claim_type == 'update':
-            if prev_cert_id and prev_cert_id != cert_id:
-                prev_claims = self.get_claims_signed_by(prev_cert_id)
+            if cert_id is not None:
                 claims = self.get_claims_signed_by(cert_id)
-                undo_info['prev_cert_to_claims'] = (prev_cert_id, prev_claims)
                 undo_info['cert_to_claims'] = (cert_id,claims)
+        elif claim_type == 'update':
+            if prev_cert_id is not None:
+                prev_claims = self.get_claims_signed_by(prev_cert_id)
+                undo_info['prev_cert_to_claims'] = (prev_cert_id,prev_claims)
                 undo_info['claim_to_cert'] = prev_cert_id
+            if cert_id is not None:
+                claims = self.get_claims_signed_by(cert_id)
+                undo_info['cert_to_claims'] = (cert_id,claims)
 
         elif claim_type == 'abandon':
             claims = self.get_claims_signed_by(cert_id)
@@ -350,50 +356,61 @@ class ClaimsStorage(Storage):
 
         return undo_info
 
-    def import_signed_claim(self, claim, claim_id, undo_info):
+
+    def import_signed_claim_transaction(self, claim, claim_id, undo_info):
         """ handle the import of claims/updates signed """
         try:
             decoded_claim = smart_decode(claim.value)
             parsed_uri = parse_lbry_uri(claim.name)
-        except DecodeError:
-            logger.warn("decode error for lbry://{}#{}".format(claim.name, claim_id))
-            return undo_info
-        except URIParseError:
-            logger.warn("uri parse error for lbry://{}#{}".format(claim.name, claim_id))
-            return undo_info
-        if not decoded_claim.has_signature:
+        except Exception as e:
+            logger.warn("decode error {} for lbry://{}#{}".format(e, claim.name, claim_id))
+            decoded_claim = None
+            cert_id = None
+        else:
+            cert_id = None
+            if decoded_claim.has_signature:
+                cert_id = decoded_claim.certificate_id
+
+        if type(claim) == deserialize.NameClaim:
+            undo_info = self.import_signed_claim(claim, cert_id, claim_id, undo_info)
+        elif type(claim) == deserialize.ClaimUpdate:
+            undo_info = self.import_signed_update(claim, cert_id, claim_id, undo_info)
+        return undo_info
+
+    def import_signed_claim(self, claim, cert_id, claim_id, undo_info):
+        if cert_id is None:
             return undo_info
 
-        cert_id = decoded_claim.certificate_id
+        undo_info = self._get_signed_claim_undo_info('claim', undo_info, cert_id)
+
+        self.db_claim_to_cert.put(claim_id, cert_id)
+        claims = self.get_claims_signed_by(cert_id)
+        claims.append(claim_id)
+        self.write_claims_signed_by(cert_id, claims)
+
+        return undo_info
+
+    def import_signed_update(self, claim, cert_id, claim_id, undo_info):
         prev_cert_id = None
-        claim_type = 'claim'
-        if type(claim) == deserialize.ClaimUpdate:
-            prev_cert_id = self.db_claim_to_cert.get(claim_id)
-            claim_type = 'update'
-        undo_info = self._get_signed_claim_undo_info(claim_type, undo_info, cert_id, prev_cert_id)
+        prev_cert_id = self.db_claim_to_cert.get(claim_id)
+        undo_info = self._get_signed_claim_undo_info('update', undo_info, cert_id, prev_cert_id)
+        # if it was signed before, need to delete previous signing info
+        if prev_cert_id is not None:
+            prev_claims = self.get_claims_signed_by(prev_cert_id)
+            prev_claims.remove(claim_id)
+            self.write_claims_signed_by(prev_cert_id, prev_claims)
+            self.db_claim_to_cert.delete(claim_id)
 
-        if claim_type == 'update':
-            if prev_cert_id and prev_cert_id != cert_id:
-                prev_claims = self.get_claims_signed_by(prev_cert_id)
-                prev_claims.remove(claim_id)
-                self.write_claims_signed_by(prev_cert_id, prev_claims)
-
-                claims = self.get_claims_signed_by(cert_id)
-                claims.append(claim_id)
-                self.write_claims_signed_by(cert_id,claims)
-
-                self.db_claim_to_cert.put(claim_id, cert_id)
-        elif claim_type == 'claim':
+        # if update is signed need to update new signing info
+        if cert_id is not None:
             self.db_claim_to_cert.put(claim_id, cert_id)
             claims = self.get_claims_signed_by(cert_id)
             claims.append(claim_id)
             self.write_claims_signed_by(cert_id, claims)
-        else:
-            raise Exception('unhandled type:{}'.format(claim_type))
 
         return undo_info
 
-    def import_signed_claim_abandon(self, claim_id, undo_info):
+    def import_signed_abandon(self, claim_id, undo_info):
         """ handle abandons of claims signed  """
         cert_id = self.db_claim_to_cert.get(claim_id)
         if cert_id is not None:
