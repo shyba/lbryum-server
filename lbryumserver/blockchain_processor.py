@@ -15,6 +15,10 @@ from lbryumserver.claims_storage import ClaimsStorage
 from lbryumserver.utils import logger, hash_decode, hash_encode, Hash, header_from_string
 from lbryumserver.utils import header_to_string, ProfiledThread, rev_hex, int_to_hex, PoWHash
 
+from lbryschema.uri import parse_lbry_uri
+from lbryschema.error import URIParseError, DecodeError
+from lbryschema.decode import smart_decode
+
 HEADER_SIZE = 112
 BLOCKS_PER_CHUNK = 96
 
@@ -477,7 +481,7 @@ class BlockchainProcessorBase(Processor):
     def get_claim_info(self, claim_id):
         result = {}
         claim_id = str(claim_id)
-        logger.warn("get_claim_info claim_id:{}".format(claim_id))
+        logger.debug("get_claim_info claim_id:{}".format(claim_id))
         claim_name = self.storage.get_claim_name(claim_id)
         claim_value = self.storage.get_claim_value(claim_id)
         claim_out = self.storage.get_outpoint_from_claim_id(claim_id)
@@ -992,8 +996,16 @@ class BlockchainProcessor(BlockchainProcessorBase):
 
     @command('blockchain.claimtrie.getclaimbyid')
     def cmd_claimtrie_getclaimbyid(self, claim_id):
+        # TODO: add what proof is possible for claim id
         claim_id = str(claim_id)
         return self.get_claim_info(claim_id)
+
+    @command('blockchain.claimtrie.getclaimsbyids')
+    def cmd_batch_get_claims_by_id(self, *claim_ids):
+        results = {}
+        for claim_id in claim_ids:
+            results[str(claim_id)] = self.get_claim_info(str(claim_id))
+        return results
 
     @command('blockchain.claimtrie.getnthclaimforname')
     def cmd_claimtrie_getnthclaimforname(self, name, n):
@@ -1027,3 +1039,94 @@ class BlockchainProcessor(BlockchainProcessorBase):
         if certificate_id:
             claims = self.storage.get_claims_signed_by(certificate_id)
             return [self.get_claim_info(claim_id) for claim_id in claims]
+
+    def get_signed_claims_with_name_for_channel(self, channel_id, name):
+        def iter_signed_by_with_name():
+            for channel_claim in self.storage.get_claims_signed_by(channel_id):
+                if self.storage.get_claim_name(channel_claim) == name:
+                    yield channel_claim
+
+        result = list(iter_signed_by_with_name())
+        return result
+
+    @command('blockchain.claimtrie.getvalueforuri')
+    def cmd_claimtrie_get_value_for_uri(self, block_hash, uri):
+        try:
+            parsed_uri = parse_lbry_uri(uri)
+        except URIParseError as err:
+            return {'error': err.message}
+        result = {}
+
+        if parsed_uri.is_channel:
+            certificate = None
+            if parsed_uri.claim_id:
+                certificate_info = self.get_claim_info(parsed_uri.claim_id)
+                if certificate_info:
+                    certificate = {'resolution_type': 'claim_id', 'result': certificate_info}
+            elif parsed_uri.claim_sequence:
+                claim_id = self.storage.get_claimid_for_nth_claim_to_name(str(parsed_uri.name),
+                                                                          parsed_uri.claim_sequence)
+                certificate_info = self.get_claim_info(str(claim_id))
+                if certificate_info:
+                    certificate = {'resolution_type': 'sequence', 'result': certificate_info}
+            else:
+                certificate_info = self.cmd_claimtrie_getvalue(parsed_uri.name, block_hash)
+                if certificate_info:
+                    certificate = {'resolution_type': 'winning', 'result': certificate_info}
+
+            if certificate and not parsed_uri.path:
+                result['certificate'] = certificate
+                channel_id = certificate['result'].get('claim_id') or certificate['result'].get('claimId')
+                channel_id = str(channel_id)
+                claim_ids_in_channel = self.storage.get_claims_signed_by(channel_id)
+                claims_in_channel = {cid: (self.storage.get_claim_name(cid),
+                                           self.storage.get_claim_height(cid))
+                                     for cid in claim_ids_in_channel}
+                result['unverified_claims_in_channel'] = claims_in_channel
+            elif certificate:
+                result['certificate'] = certificate
+                channel_id = certificate['result'].get('claim_id') or certificate['result'].get('claimId')
+                channel_id = str(channel_id)
+                claim_ids_matching_name = self.get_signed_claims_with_name_for_channel(channel_id, parsed_uri.path)
+
+                claims_in_channel = {cid: (self.storage.get_claim_name(cid),
+                                           self.storage.get_claim_height(cid))
+                                     for cid in claim_ids_matching_name}
+                result['unverified_claims_for_name'] = claims_in_channel
+        else:
+            claim = None
+            if parsed_uri.claim_id:
+                claim_info = self.get_claim_info(parsed_uri.claim_id)
+                if claim_info:
+                    claim = {'resolution_type': 'claim_id', 'result': claim_info}
+            elif parsed_uri.claim_sequence:
+                claim_id = self.storage.get_claimid_for_nth_claim_to_name(str(parsed_uri.name),
+                                                                          parsed_uri.claim_sequence)
+                claim_info = self.get_claim_info(str(claim_id))
+                if claim_info:
+                    claim = {'resolution_type': 'sequence', 'result': claim_info}
+            else:
+                claim_info = self.cmd_claimtrie_getvalue(parsed_uri.name, block_hash)
+                if claim_info:
+                    claim = {'resolution_type': 'winning', 'result': claim_info}
+            if claim:
+                try:
+                    claim_val = self.get_claim_info(claim['result']['claim_id'])
+                    decoded = smart_decode(claim_val['value'])
+                    if decoded.certificate_id:
+                        certificate_info = self.get_claim_info(decoded.certificate_id)
+                        if certificate_info:
+                            certificate = {'resolution_type': 'claim_id',
+                                           'result': certificate_info}
+                            result['certificate'] = certificate
+                except DecodeError:
+                    pass
+                result['claim'] = claim
+        return result
+
+    @command('blockchain.claimtrie.getvaluesforuris')
+    def cmd_batch_claimtrie_get_value_for_uri(self, block_hash, *uris):
+        results = {}
+        for uri in uris:
+            results[uri] = self.cmd_claimtrie_get_value_for_uri(block_hash, uri)
+        return results
