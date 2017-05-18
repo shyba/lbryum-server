@@ -15,9 +15,11 @@ from lbryumserver.processor import logger
 from lbryumserver.utils import int_to_hex, hex_to_int, print_log
 
 
+
 class ClaimsStorage(Storage):
     def __init__(self, config, shared, test_reorgs):
         Storage.__init__(self, config, shared, test_reorgs)
+
 
     def get_claimid_for_nth_claim_to_name(self, name, n):
         claims = self.db_claim_order.get(name)
@@ -38,12 +40,12 @@ class ClaimsStorage(Storage):
     def get_claim_id_from_outpoint(self, txid, nout):
         #TODO: may want to look into keeping a db of txid nout to outpoint
         # if too slow here
-        for claim_id, txid_nout_amount in self.db_claim_outpoint.db.iterator():
-            c_txid = txid_nout_amount[0:64]
-            c_nout = hex_to_int(txid_nout_amount[64:72].decode('hex'))
-            logger.debug('get_claim_id_from_outpoint:{}:{}, {}:{}'.format(txid,nout,c_txid,c_nout))
-            if txid == c_txid and nout == c_nout:
-                return claim_id
+        outpoint = txid+int_to_hex(nout, 4)
+        return self.db_outpoint_to_claim.get(outpoint) 
+    
+    def write_claim_id_from_outpoint(self, txid, nout, claim_id):
+        outpoint = txid+int_to_hex(nout,4)
+        self.db_outpoint_to_claim.put(outpoint, claim_id)
 
     def get_outpoint_from_claim_id(self, claim_id):
         txid_nout = self.db_claim_outpoint.get(claim_id)
@@ -57,6 +59,7 @@ class ClaimsStorage(Storage):
     def write_outpoint_from_claim_id(self, claim_id, txid, nout, amount):
         txid_nout_amount = txid+int_to_hex(nout, 4)+int_to_hex(amount,8)
         self.db_claim_outpoint.put(claim_id, txid_nout_amount)
+                
 
     def get_claims_for_name(self, name):
         claims = self.db_claim_order.get(name)
@@ -114,7 +117,7 @@ class ClaimsStorage(Storage):
         claim_id = deserialize.claim_id_bytes_to_hex(claim_id)
         return claim_id
 
-    def _get_undo_info(self, claim_type, claim_id, claim_name):
+    def _get_undo_info(self, claim_type, claim_id, claim_name, txid, nout):
         undo_info={"claim_id":claim_id,"claim_type":claim_type,"claim_name":claim_name}
         if claim_type != 'claim':
             undo_info['claim_outpoint'] = self.db_claim_outpoint.get(claim_id)
@@ -123,6 +126,7 @@ class ClaimsStorage(Storage):
             undo_info['claim_height']= self.db_claim_height.get(claim_id)
             undo_info['claim_addrs']= self.db_claim_addrs.get(claim_id)
 
+        undo_info['outpoint_to_claim'] = txid+int_to_hex(nout,4)
         undo_info['claim_order']= self.db_claim_order.get(claim_name)
         return undo_info
 
@@ -142,6 +146,7 @@ class ClaimsStorage(Storage):
             for i in tx.get('inputs'):
                 txid = i['prevout_hash']
                 nout = i['prevout_n']
+                logger.warn("txid:{}, nout:{}, claim id:{}, claim id from outpoint:{}".format(txid, nout,claim_id,self.get_claim_id_from_outpoint(txid, nout)))
                 if claim_id == self.get_claim_id_from_outpoint(txid, nout):
                     return True
             logger.warn("found invalid update {} for {}".format(claim_id, claim.name))
@@ -162,6 +167,8 @@ class ClaimsStorage(Storage):
                 self.db_claim_height.put(claim_id, undo_info['claim_height'])
                 self.db_claim_addrs.put(claim_id, undo_info['claim_addrs'])
                 self.db_claim_order.put(claim_name, undo_info['claim_order'])
+                self.db_outpoint_to_claim.delete(undo_info['outpoint_to_claim'])
+                self.db_outpoint_to_claim.put(undo_info['claim_outpoint'], claim_id)
 
                 # updated to signed claim
                 if 'cert_to_claims' in undo_info:
@@ -182,6 +189,7 @@ class ClaimsStorage(Storage):
                 self.db_claim_values.delete(claim_id)
                 self.db_claim_height.delete(claim_id)
                 self.db_claim_addrs.delete(claim_id)
+                self.db_outpoint_to_claim.delete(undo_info['outpoint_to_claim'])
                 if undo_info['claim_order'] is not None:
                     self.db_claim_order.put(claim_name, undo_info['claim_order'])
                 else:
@@ -200,7 +208,7 @@ class ClaimsStorage(Storage):
                 self.db_claim_height.put(claim_id, undo_info['claim_height'])
                 self.db_claim_addrs.put(claim_id, undo_info['claim_addrs'])
                 self.db_claim_order.put(claim_name, undo_info['claim_order'])
-
+                self.db_outpoint_to_claim.put(undo_info['outpoint_to_claim'],claim_id)
                 if 'cert_to_claims' in undo_info:
                     cert_id = undo_info['cert_to_claims'][0]
                     claims = undo_info['cert_to_claims'][1]
@@ -220,7 +228,6 @@ class ClaimsStorage(Storage):
             claim_id = self.get_claim_id_from_outpoint(x['prevout_hash'], x['prevout_n'])
             if claim_id:
                 abandons[claim_id] = {'txid':x['prevout_hash'],'nout':x['prevout_n']}
-
         for x in tx.get('outputs'):
             script = x.get('raw_output_script').decode('hex')
             nout = x.get('index')
@@ -269,7 +276,7 @@ class ClaimsStorage(Storage):
     def import_claim(self, claim, claim_id, claim_address, txid, nout, amount, block_height):
         logger.info("importing claim {}, claim id:{}, txid:{}, nout:{} ".format(claim.name, claim_id, txid, nout))
 
-        undo_info = self._get_undo_info('claim', claim_id, claim.name)
+        undo_info = self._get_undo_info('claim', claim_id, claim.name, txid, nout)
 
         claims_for_name = self.get_claims_for_name(claim.name)
         if not claims_for_name:
@@ -281,6 +288,7 @@ class ClaimsStorage(Storage):
         self.write_claims_for_name(claim.name, claims_for_name)
 
         self.write_outpoint_from_claim_id(claim_id, txid, nout, amount)
+        self.write_claim_id_from_outpoint(txid, nout, claim_id)
         self.db_claim_names.put(claim_id, claim.name)
         self.db_claim_values.put(claim_id, claim.value)
         self.db_claim_height.put(claim_id, str(block_height))
@@ -292,7 +300,12 @@ class ClaimsStorage(Storage):
     def import_update(self, claim, claim_id, claim_address, txid, nout, amount, block_height):
         logger.info("importing update {}, claim id:{}, txid:{}, nout:{} ".format(claim.name, claim_id, txid, nout))
 
-        undo_info = self._get_undo_info('update', claim_id, claim.name)
+        undo_info = self._get_undo_info('update', claim_id, claim.name, txid, nout)
+
+        txid_orig_claim,nout_orig_claim,amount = self.get_outpoint_from_claim_id(claim_id)
+        self.db_outpoint_to_claim.delete(txid_orig_claim+int_to_hex(nout_orig_claim,4))
+        self.write_claim_id_from_outpoint(txid, nout, claim_id)
+
 
         self.write_outpoint_from_claim_id(claim_id, txid, nout, amount)
         self.db_claim_values.put(claim_id, claim.value)
@@ -306,10 +319,10 @@ class ClaimsStorage(Storage):
         """ handle abandoned claims """
         claim_id = self.get_claim_id_from_outpoint(txid, nout)
         claim_name = self.get_claim_name(claim_id)
-        if claim_id is None:
-            return
 
-        undo_info = self._get_undo_info('abandon', claim_id, claim_name)
+        undo_info = self._get_undo_info('abandon', claim_id, claim_name, txid, nout)
+        self.db_outpoint_to_claim.delete(txid+int_to_hex(nout,4))
+
         self.db_claim_outpoint.delete(claim_id)
         self.db_claim_values.delete(claim_id)
         self.db_claim_height.delete(claim_id)

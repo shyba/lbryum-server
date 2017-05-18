@@ -195,6 +195,9 @@ class Storage(object):
             self.db_undo_claim = DB(self.dbpath, 'undo_claim', 256 * 1024 * 1024)
             # key = claim id hex, value = txid hex sting + nout + amount
             self.db_claim_outpoint = DB(self.dbpath, 'claim_outpoint', config.getint('leveldb', 'claimid_cache'))
+            # key =  txid+ nout , value = claim id hex
+            self.db_outpoint_to_claim = DB(self.dbpath, 'outpoint_to_claim', 8*1024*1024)
+
             # key = claim id hex, value = claim name
             self.db_claim_names = DB(self.dbpath, 'claim_names', 64 * 1024 * 1024)
             # key = claim id hex, value = claim value
