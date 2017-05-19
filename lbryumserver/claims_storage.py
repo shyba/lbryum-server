@@ -155,6 +155,7 @@ class ClaimsStorage(Storage):
             return True
 
     def revert_claim_transaction(self, undo_infos):
+        log.info('reverting claim:{}'.format(undo_infos))
         """ revert claim transaction using undo information"""
         for undo_info in undo_infos:
             claim_id = undo_info['claim_id']
@@ -168,7 +169,7 @@ class ClaimsStorage(Storage):
                 self.db_claim_addrs.put(claim_id, undo_info['claim_addrs'])
                 self.db_claim_order.put(claim_name, undo_info['claim_order'])
                 self.db_outpoint_to_claim.delete(undo_info['outpoint_to_claim'])
-                self.db_outpoint_to_claim.put(undo_info['claim_outpoint'], claim_id)
+                self.db_outpoint_to_claim.put(undo_info['claim_outpoint'][0:72], claim_id)
 
                 # updated to signed claim
                 if 'cert_to_claims' in undo_info:
@@ -316,6 +317,7 @@ class ClaimsStorage(Storage):
         return undo_info
 
     def import_abandon(self, txid, nout):
+        logger.info("importing abandon txid:{}, nout:{} ".format(txid, nout))
         """ handle abandoned claims """
         claim_id = self.get_claim_id_from_outpoint(txid, nout)
         claim_name = self.get_claim_name(claim_id)
