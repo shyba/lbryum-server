@@ -566,6 +566,7 @@ class Storage(object):
 
     def batch_write(self):
         for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claim_outpoint,
+                   self.db_outpoint_to_claim,
                    self.db_claim_values, self.db_claim_height, self.db_claim_names,
                    self.db_claim_order, self.db_cert_to_claims, self.db_claim_to_cert,
                    self.db_claim_addrs]:
@@ -573,6 +574,7 @@ class Storage(object):
 
     def close(self):
         for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claim_outpoint,
+                   self.db_outpoint_to_claim,
                    self.db_claim_values, self.db_claim_height, self.db_claim_names,
                    self.db_claim_order, self.db_cert_to_claims, self.db_claim_to_cert,
                    self.db_claim_addrs]:

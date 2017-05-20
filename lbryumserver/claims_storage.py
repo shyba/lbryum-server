@@ -140,6 +140,7 @@ class ClaimsStorage(Storage):
             # claim is invalid if its name does not match
             # what its updating
             if claim_name != claim.name:
+                logger.warn('found invalid update, name mismatch,{}/{}'.format(claim_name,claim.name))
                 return False
             # claim is invalid if it does not spend the claim it
             # is updating
@@ -149,7 +150,7 @@ class ClaimsStorage(Storage):
                 logger.warn("txid:{}, nout:{}, claim id:{}, claim id from outpoint:{}".format(txid, nout,claim_id,self.get_claim_id_from_outpoint(txid, nout)))
                 if claim_id == self.get_claim_id_from_outpoint(txid, nout):
                     return True
-            logger.warn("found invalid update {} for {}".format(claim_id, claim.name))
+            logger.warn("found invalid update, claim not found: {} for {}".format(claim_id, claim.name))
             return False
         else:
             return True
