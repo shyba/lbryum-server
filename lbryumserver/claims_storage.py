@@ -379,7 +379,7 @@ class ClaimsStorage(Storage):
             decoded_claim = smart_decode(claim.value)
             parsed_uri = parse_lbry_uri(claim.name)
         except Exception as e:
-            logger.warn("decode error {} for lbry://{}#{}".format(e, claim.name, claim_id))
+            logger.warn("decode error for lbry://{}#{}".format(claim.name, claim_id))
             decoded_claim = None
             cert_id = None
         else:

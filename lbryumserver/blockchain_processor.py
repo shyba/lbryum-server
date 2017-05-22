@@ -519,6 +519,7 @@ class BlockchainProcessorBase(Processor):
 
     def get_claim_info(self, claim_id):
         result = {}
+        claim_id = str(claim_id)
         logger.warn("get_claim_info claim_id:{}".format(claim_id))
         claim_name = self.storage.get_claim_name(claim_id)
         claim_value = self.storage.get_claim_value(claim_id)
@@ -975,7 +976,7 @@ class BlockchainProcessor(BlockchainProcessorBase):
 
         result = {'proof': proof}
         if 'txhash' in proof and 'nOut' in proof:
-            txid, nout = proof['txhash'], proof['nOut']
+            txid, nout = str(proof['txhash']), int(proof['nOut'])
             transaction_info = self.lbrycrdd('getrawtransaction', (proof['txhash'], 1))
             transaction = transaction_info['hex']
             transaction_height = self.lbrycrdd_height - transaction_info['confirmations']
