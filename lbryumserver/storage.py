@@ -195,6 +195,9 @@ class Storage(object):
             self.db_undo_claim = DB(self.dbpath, 'undo_claim', 256 * 1024 * 1024)
             # key = claim id hex, value = txid hex sting + nout + amount
             self.db_claim_outpoint = DB(self.dbpath, 'claim_outpoint', config.getint('leveldb', 'claimid_cache'))
+            # key =  txid+ nout , value = claim id hex
+            self.db_outpoint_to_claim = DB(self.dbpath, 'outpoint_to_claim', 8*1024*1024)
+
             # key = claim id hex, value = claim name
             self.db_claim_names = DB(self.dbpath, 'claim_names', 64 * 1024 * 1024)
             # key = claim id hex, value = claim value
@@ -563,6 +566,7 @@ class Storage(object):
 
     def batch_write(self):
         for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claim_outpoint,
+                   self.db_outpoint_to_claim,
                    self.db_claim_values, self.db_claim_height, self.db_claim_names,
                    self.db_claim_order, self.db_cert_to_claims, self.db_claim_to_cert,
                    self.db_claim_addrs]:
@@ -570,6 +574,7 @@ class Storage(object):
 
     def close(self):
         for db in [self.db_utxo, self.db_addr, self.db_hist, self.db_undo, self.db_claim_outpoint,
+                   self.db_outpoint_to_claim,
                    self.db_claim_values, self.db_claim_height, self.db_claim_names,
                    self.db_claim_order, self.db_cert_to_claims, self.db_claim_to_cert,
                    self.db_claim_addrs]:
