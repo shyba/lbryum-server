@@ -402,49 +402,6 @@ class BlockchainProcessorBase(Processor):
             is_coinbase = False
         return tx_hashes, txdict
 
-    def import_claim_transaction(self, claim, script, txid, nout, block_height, revert):
-        if type(claim) in [deserialize.NameClaim, deserialize.ClaimUpdate]:
-            if type(claim) == deserialize.ClaimUpdate:
-                is_claim_update = True
-            else:
-                is_claim_update = False
-            claim_address = deserialize.get_address_from_output_script(script)
-            if is_claim_update:
-                claim_id = claim.claim_id.encode('hex')
-            else:
-                claim_id = self.storage._get_claim_id(txid, nout)
-            if is_claim_update and revert:
-                undo_claim_info = self.storage.get_undo_claim_info(claim.claim_id)
-                self.storage.revert_claim(claim, txid, nout, undo_claim_info)
-            elif revert:
-                self.storage.revert_claim(claim, txid, nout)
-            else:
-                undo_claim_info = self.storage.import_claim(claim, txid, nout, amount,
-                                                            block_height, claim_address)
-                self.storage.write_undo_claim_info(block_height, self.lbrycrdd_height,
-                                                   claim_id, undo_claim_info)
-
-        elif type(claim) == deserialize.ClaimSupport:
-            name = self.storage.get_claim_name(claim.claim_id.encode('hex'))
-            print_log("Found (but ignoring) support for lbry://%s#%s" % (name, claim.claim_id.encode('hex')))
-
-    def _is_valid_claim(self, claim, tx):
-        """
-        a claim could be invalid if it is an update but does not spend the claim it is
-        updating
-        """
-
-        if type(claim) == deserialize.ClaimUpdate:
-            claim_id = deserialize.claim_id_bytes_to_hex(claim.claim_id)
-            for i in tx.get('inputs'):
-                txid = i['prevout_hash']
-                nout = i['prevout_n']
-                if claim_id == self.storage.get_claim_id_from_outpoint(txid, nout):
-                    return True
-            logger.warn("Found invalid update for:{}".format(claim_id))
-            return False
-        else:
-            return True
 
     def import_block(self, block, block_hash, block_height, revert=False):
 
