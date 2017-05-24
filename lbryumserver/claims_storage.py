@@ -156,7 +156,7 @@ class ClaimsStorage(Storage):
             return True
 
     def revert_claim_transaction(self, undo_infos):
-        log.info('reverting claim:{}'.format(undo_infos))
+        logger.info('reverting claim:{}'.format(undo_infos))
         """ revert claim transaction using undo information"""
         for undo_info in undo_infos:
             claim_id = undo_info['claim_id']
