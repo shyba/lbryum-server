@@ -22,6 +22,9 @@ from lbryschema.decode import smart_decode
 HEADER_SIZE = 112
 BLOCKS_PER_CHUNK = 96
 
+# This determines the max uris that can be requested
+# in a single batch command
+MAX_BATCH_URIS = 500
 
 def command(cmd_name):
     def _wrapper(fn):
@@ -1001,6 +1004,8 @@ class BlockchainProcessor(BlockchainProcessorBase):
 
     @command('blockchain.claimtrie.getclaimsbyids')
     def cmd_batch_get_claims_by_id(self, *claim_ids):
+        if len(claim_ids) > MAX_BATCH_URIS:
+            raise Exception("Exceeds max batch uris of {}".format(MAX_BATCH_URIS))
         results = {}
         for claim_id in claim_ids:
             results[str(claim_id)] = self.get_claim_info(str(claim_id))
@@ -1127,6 +1132,8 @@ class BlockchainProcessor(BlockchainProcessorBase):
 
     @command('blockchain.claimtrie.getvaluesforuris')
     def cmd_batch_claimtrie_get_value_for_uri(self, block_hash, uris):
+        if len(uris) > MAX_BATCH_URIS:
+            raise Exception("Exceeds max batch uris of {}".format(MAX_BATCH_URIS))
         results = {}
         for uri in uris:
             results[uri] = self.cmd_claimtrie_get_value_for_uri(block_hash, uri)
