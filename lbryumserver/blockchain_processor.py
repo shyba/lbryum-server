@@ -34,6 +34,10 @@ def command(cmd_name):
     return _wrapper
 
 
+def lbrycrd_proof_has_winning_claim(proof):
+    return 'txhash' in proof and 'nOut' in proof
+
+
 class BlockchainProcessorBase(Processor):
     def __init__(self, config, shared):
         Processor.__init__(self)
@@ -939,7 +943,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
             proof = self.lbrycrdd('getnameproof', (name,))
 
         result = {'proof': proof}
-        if 'txhash' in proof and 'nOut' in proof:
+        if lbrycrd_proof_has_winning_claim(proof):
             txid, nout = str(proof['txhash']), int(proof['nOut'])
             transaction_info = self.lbrycrdd('getrawtransaction', (proof['txhash'], 1))
             transaction = transaction_info['hex']
@@ -1116,7 +1120,9 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
                 claim_info = self.cmd_claimtrie_getvalue(parsed_uri.name, block_hash)
                 if claim_info:
                     claim = {'resolution_type': 'winning', 'result': claim_info}
-            if claim:
+            if (claim and
+                # is not an unclaimed winning name
+                (claim['resolution_type'] != 'winning' or lbrycrd_proof_has_winning_claim(claim['result']['proof']))):
                 try:
                     claim_val = self.get_claim_info(claim['result']['claim_id'])
                     decoded = smart_decode(claim_val['value'])
