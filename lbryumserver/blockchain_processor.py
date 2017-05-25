@@ -1051,6 +1051,8 @@ class BlockchainProcessor(BlockchainProcessorBase):
 
     @command('blockchain.claimtrie.getvalueforuri')
     def cmd_claimtrie_get_value_for_uri(self, block_hash, uri):
+        uri = str(uri)
+        block_hash = str(block_hash)
         try:
             parsed_uri = parse_lbry_uri(uri)
         except URIParseError as err:
