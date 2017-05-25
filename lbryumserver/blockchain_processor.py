@@ -1126,7 +1126,7 @@ class BlockchainProcessor(BlockchainProcessorBase):
         return result
 
     @command('blockchain.claimtrie.getvaluesforuris')
-    def cmd_batch_claimtrie_get_value_for_uri(self, block_hash, *uris):
+    def cmd_batch_claimtrie_get_value_for_uri(self, block_hash, uris):
         results = {}
         for uri in uris:
             results[uri] = self.cmd_claimtrie_get_value_for_uri(block_hash, uri)
