@@ -1003,7 +1003,7 @@ class BlockchainProcessor(BlockchainProcessorBase):
         return self.get_claim_info(claim_id)
 
     @command('blockchain.claimtrie.getclaimsbyids')
-    def cmd_batch_get_claims_by_id(self, claim_ids):
+    def cmd_batch_get_claims_by_id(self, *claim_ids):
         if len(claim_ids) > MAX_BATCH_URIS:
             raise Exception("Exceeds max batch uris of {}".format(MAX_BATCH_URIS))
         results = {}
