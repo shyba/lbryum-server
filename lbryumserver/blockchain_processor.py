@@ -1131,7 +1131,7 @@ class BlockchainProcessor(BlockchainProcessorBase):
         return result
 
     @command('blockchain.claimtrie.getvaluesforuris')
-    def cmd_batch_claimtrie_get_value_for_uri(self, block_hash, uris):
+    def cmd_batch_claimtrie_get_value_for_uri(self, block_hash, *uris):
         if len(uris) > MAX_BATCH_URIS:
             raise Exception("Exceeds max batch uris of {}".format(MAX_BATCH_URIS))
         results = {}
