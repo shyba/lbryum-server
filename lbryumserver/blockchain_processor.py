@@ -815,8 +815,7 @@ class BlockchainProcessorBase(Processor):
 
         fn = self._get_command(request['method'])
         params = request.get('params', ())
-        if params == ():
-            return fn()
+        print "process %s(%s)" % (request['method'], str(params))
         return fn(*params)
 
 
