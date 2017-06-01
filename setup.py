@@ -19,7 +19,7 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 
 setup(
     name="lbryum-server",
-    packages=find_packages(base_dir),
+    packages=find_packages(base_dir, exclude=['tests']),
     version=__version__,
     entry_points={'console_scripts': ['lbryum-server = lbryumserver.main:main']},
     install_requires=requires,
