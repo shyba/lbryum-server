@@ -818,11 +818,10 @@ class BlockchainProcessorBase(Processor):
 
         fn = self._get_command(request['method'])
         params = request.get('params', ())
-        print "process %s(%s)" % (request['method'], str(params))
         return fn(*params)
 
 
-class BlockchainProcessor(BlockchainProcessorBase):
+class BlockchainSubscriptionProcessor(BlockchainProcessorBase):
     @command('blockchain.numblocks.subscribe')
     def cmd_numblocks_subscribe(self):
         return self.storage.height
@@ -836,6 +835,8 @@ class BlockchainProcessor(BlockchainProcessorBase):
         address = str(address)
         return self.get_status(address, cache_only)
 
+
+class BlockchainProcessor(BlockchainSubscriptionProcessor):
     @command('blockchain.address.get_history')
     def cmd_address_get_history(self, address, cache_only=False):
         address = str(address)
