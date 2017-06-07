@@ -26,6 +26,11 @@ BLOCKS_PER_CHUNK = 96
 # in a single batch command
 MAX_BATCH_URIS = 500
 
+CLAIM_ID = "claim_id"
+WINNING = "winning"
+SEQUENCE = "sequence"
+
+
 def command(cmd_name):
     def _wrapper(fn):
         setattr(fn, '_is_command', True)
@@ -1073,17 +1078,17 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
             if parsed_uri.claim_id:
                 certificate_info = self.get_claim_info(parsed_uri.claim_id)
                 if certificate_info:
-                    certificate = {'resolution_type': 'claim_id', 'result': certificate_info}
+                    certificate = {'resolution_type': CLAIM_ID, 'result': certificate_info}
             elif parsed_uri.claim_sequence:
                 claim_id = self.storage.get_claimid_for_nth_claim_to_name(str(parsed_uri.name),
                                                                           parsed_uri.claim_sequence)
                 certificate_info = self.get_claim_info(str(claim_id))
                 if certificate_info:
-                    certificate = {'resolution_type': 'sequence', 'result': certificate_info}
+                    certificate = {'resolution_type': SEQUENCE, 'result': certificate_info}
             else:
                 certificate_info = self.cmd_claimtrie_getvalue(parsed_uri.name, block_hash)
                 if certificate_info:
-                    certificate = {'resolution_type': 'winning', 'result': certificate_info}
+                    certificate = {'resolution_type': WINNING, 'result': certificate_info}
 
             if certificate and not parsed_uri.path:
                 result['certificate'] = certificate
@@ -1109,27 +1114,27 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
             if parsed_uri.claim_id:
                 claim_info = self.get_claim_info(parsed_uri.claim_id)
                 if claim_info:
-                    claim = {'resolution_type': 'claim_id', 'result': claim_info}
+                    claim = {'resolution_type': CLAIM_ID, 'result': claim_info}
             elif parsed_uri.claim_sequence:
                 claim_id = self.storage.get_claimid_for_nth_claim_to_name(str(parsed_uri.name),
                                                                           parsed_uri.claim_sequence)
                 claim_info = self.get_claim_info(str(claim_id))
                 if claim_info:
-                    claim = {'resolution_type': 'sequence', 'result': claim_info}
+                    claim = {'resolution_type': SEQUENCE, 'result': claim_info}
             else:
                 claim_info = self.cmd_claimtrie_getvalue(parsed_uri.name, block_hash)
                 if claim_info:
-                    claim = {'resolution_type': 'winning', 'result': claim_info}
+                    claim = {'resolution_type': WINNING, 'result': claim_info}
             if (claim and
                 # is not an unclaimed winning name
-                (claim['resolution_type'] != 'winning' or lbrycrd_proof_has_winning_claim(claim['result']['proof']))):
+                (claim['resolution_type'] != WINNING or lbrycrd_proof_has_winning_claim(claim['result']['proof']))):
                 try:
                     claim_val = self.get_claim_info(claim['result']['claim_id'])
                     decoded = smart_decode(claim_val['value'])
                     if decoded.certificate_id:
                         certificate_info = self.get_claim_info(decoded.certificate_id)
                         if certificate_info:
-                            certificate = {'resolution_type': 'claim_id',
+                            certificate = {'resolution_type': CLAIM_ID,
                                            'result': certificate_info}
                             result['certificate'] = certificate
                 except DecodeError:
