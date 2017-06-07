@@ -125,7 +125,7 @@ def create_config(filename=None):
     config.set('server', 'coin', '')
     config.set('server', 'logfile', os.path.join(DEFAULT_LBRYUM_LOG_DIR, "lbryum.log"))
     config.set('server', 'donation_address', '')
-    config.set('server', 'max_subscriptions', '10000')
+    config.set('server', 'max_subscriptions', '15000')
 
     config.add_section('leveldb')
     config.set('leveldb', 'path', os.path.join(DEFAULT_DATA_DIR, 'lbryum_db'))
