@@ -372,20 +372,19 @@ class ClaimsStorage(Storage):
 
         return undo_info
 
-
     def import_signed_claim_transaction(self, claim, claim_id, undo_info):
         """ handle the import of claims/updates signed """
         try:
             decoded_claim = smart_decode(claim.value)
             parsed_uri = parse_lbry_uri(claim.name)
+            if decoded_claim.has_signature:
+                cert_id = decoded_claim.certificate_id
+            else:
+                cert_id = None
         except Exception as e:
             logger.warn("decode error for lbry://{}#{}".format(claim.name, claim_id))
             decoded_claim = None
             cert_id = None
-        else:
-            cert_id = None
-            if decoded_claim.has_signature:
-                cert_id = decoded_claim.certificate_id
 
         if type(claim) == deserialize.NameClaim:
             undo_info = self.import_signed_claim(claim, cert_id, claim_id, undo_info)
