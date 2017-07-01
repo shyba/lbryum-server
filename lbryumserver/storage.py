@@ -301,8 +301,7 @@ class Storage(object):
                     v = hex_to_int(v[0:8])
                     out.append({'tx_hash': txid, 'tx_pos': txpos, 'height': h, 'value': v})
                 if len(out) == 1000:
-                    print_log('max utxo reached', addr)
-                    break
+                    print_log('addr has large amount of utxos', addr)
 
         out.sort(key=lambda x: x['height'])
         return out
