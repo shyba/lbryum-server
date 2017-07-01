@@ -334,15 +334,14 @@ class Storage(object):
 
 
     def get_undo_info(self, height):
-        s = self.db_undo.get("undo_info_%d" % (height % 100))
+        s = self.db_undo.get("undo_info_%d" % height)
         if s is None:
             print_log("no undo info for ", height)
             return None
         return pickle.loads(s)
 
-    def write_undo_info(self, height, lbrycrdd_height, undo_info):
-        if height > lbrycrdd_height - 100 or self.test_reorgs:
-            self.db_undo.put("undo_info_%d" % (height % 100), pickle.dumps(undo_info))
+    def write_undo_info(self, height, undo_info):
+        self.db_undo.put("undo_info_%d" % height, pickle.dumps(undo_info))
 
     @staticmethod
     def common_prefix(word1, word2):
