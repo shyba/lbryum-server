@@ -224,7 +224,6 @@ class Storage(object):
             print_log('Initializing database')
             self.height = 0
             self.last_hash = GENESIS_HASH
-            self.pruning_limit = config.getint('leveldb', 'pruning_limit')
             db_version = DB_VERSION
             self.put_node('', Node.from_dict({}))
         # check version
@@ -232,18 +231,11 @@ class Storage(object):
             print_log("Your database '%s' is deprecated. Please create a new database" % self.dbpath)
             self.shared.stop()
             return
-        # pruning limit
-        try:
-            self.pruning_limit = ast.literal_eval(self.db_undo.get('limit'))
-        except:
-            self.pruning_limit = config.getint('leveldb', 'pruning_limit')
-            self.db_undo.put('version', repr(self.pruning_limit))
         # compute root hash
         root_node = self.get_node('')
         self.root_hash, coins = root_node.get_hash('', None)
         # print stuff
         print_log("Database version %d." % db_version)
-        print_log("Pruning limit for spent outputs is %d." % self.pruning_limit)
         print_log("Blockchain height", self.height)
         print_log("UTXO tree root hash:", self.root_hash.encode('hex'))
         print_log("Coins in database:", coins)
@@ -615,10 +607,10 @@ class Storage(object):
         self.db_addr.delete(txi)
         # add to history
         s = self.db_hist.get(addr)
-        if s is None: s = ''
+        if s is None:
+            s = ''
         txo = (txid + int_to_hex(index, 4) + int_to_hex(height, 4)).decode('hex')
         s += txi + int_to_hex(in_height, 4).decode('hex') + txo
-        s = s[-80 * self.pruning_limit:]
         self.db_hist.put(addr, s)
 
     def revert_set_spent(self, addr, txi, undo):
