@@ -7,6 +7,7 @@ import ast
 import os
 import threading
 import json
+import re
 import pickle
 
 from ecdsa.keys import BadSignatureError
@@ -304,15 +305,14 @@ class Storage(object):
         for item in o:
             out.append((item['height'], item['tx_hash']))
         h = self.db_hist.get(addr)
-        while h:
-            item = h[0:80]
-            h = h[80:]
-            txi = item[0:32].encode('hex')
-            hi = hex_to_int(item[36:40])
-            txo = item[40:72].encode('hex')
-            ho = hex_to_int(item[76:80])
-            out.append((hi, txi))
-            out.append((ho, txo))
+        if h:
+            for item in re.findall('.{80}', h, flags=re.DOTALL):
+                txi = item[0:32].encode('hex')
+                hi = hex_to_int(item[36:40])
+                txo = item[40:72].encode('hex')
+                ho = hex_to_int(item[76:80])
+                out.append((hi, txi))
+                out.append((ho, txo))
         # uniqueness
         out = set(out)
         # sort by height then tx_hash
