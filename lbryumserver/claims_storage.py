@@ -101,15 +101,14 @@ class ClaimsStorage(Storage):
         return self.db_claim_names.get(claim_id)
 
     def get_undo_claim_info(self, height):
-        s = self.db_undo_claim.get("undo_info_%d"%(height%100))
+        s = self.db_undo_claim.get("undo_info_%d" % height)
         if s is None:
             print_log('no undo info for {}'.format(height))
             return None
         return pickle.loads(s)
 
-    def write_undo_claim_info(self, height, lbrycrdd_height, undo_info):
-        if height > lbrycrdd_height - 100 or self.test_reorgs:
-            self.db_undo_claim.put("undo_info_%d" % (height % 100), pickle.dumps(undo_info))
+    def write_undo_claim_info(self, height, undo_info):
+        self.db_undo_claim.put("undo_info_%d" % height, pickle.dumps(undo_info))
 
     def _get_claim_id(self, txid, nout):
         """ get claim id in hex from txid in hex and nout int """

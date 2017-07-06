@@ -7,6 +7,7 @@ import ast
 import os
 import threading
 import json
+import re
 import pickle
 
 from ecdsa.keys import BadSignatureError
@@ -224,7 +225,6 @@ class Storage(object):
             print_log('Initializing database')
             self.height = 0
             self.last_hash = GENESIS_HASH
-            self.pruning_limit = config.getint('leveldb', 'pruning_limit')
             db_version = DB_VERSION
             self.put_node('', Node.from_dict({}))
         # check version
@@ -232,18 +232,11 @@ class Storage(object):
             print_log("Your database '%s' is deprecated. Please create a new database" % self.dbpath)
             self.shared.stop()
             return
-        # pruning limit
-        try:
-            self.pruning_limit = ast.literal_eval(self.db_undo.get('limit'))
-        except:
-            self.pruning_limit = config.getint('leveldb', 'pruning_limit')
-            self.db_undo.put('version', repr(self.pruning_limit))
         # compute root hash
         root_node = self.get_node('')
         self.root_hash, coins = root_node.get_hash('', None)
         # print stuff
         print_log("Database version %d." % db_version)
-        print_log("Pruning limit for spent outputs is %d." % self.pruning_limit)
         print_log("Blockchain height", self.height)
         print_log("UTXO tree root hash:", self.root_hash.encode('hex'))
         print_log("Coins in database:", coins)
@@ -312,15 +305,14 @@ class Storage(object):
         for item in o:
             out.append((item['height'], item['tx_hash']))
         h = self.db_hist.get(addr)
-        while h:
-            item = h[0:80]
-            h = h[80:]
-            txi = item[0:32].encode('hex')
-            hi = hex_to_int(item[36:40])
-            txo = item[40:72].encode('hex')
-            ho = hex_to_int(item[76:80])
-            out.append((hi, txi))
-            out.append((ho, txo))
+        if h:
+            for item in re.findall('.{80}', h, flags=re.DOTALL):
+                txi = item[0:32].encode('hex')
+                hi = hex_to_int(item[36:40])
+                txo = item[40:72].encode('hex')
+                ho = hex_to_int(item[76:80])
+                out.append((hi, txi))
+                out.append((ho, txo))
         # uniqueness
         out = set(out)
         # sort by height then tx_hash
@@ -334,15 +326,14 @@ class Storage(object):
 
 
     def get_undo_info(self, height):
-        s = self.db_undo.get("undo_info_%d" % (height % 100))
+        s = self.db_undo.get("undo_info_%d" % height)
         if s is None:
             print_log("no undo info for ", height)
             return None
         return pickle.loads(s)
 
-    def write_undo_info(self, height, lbrycrdd_height, undo_info):
-        if height > lbrycrdd_height - 100 or self.test_reorgs:
-            self.db_undo.put("undo_info_%d" % (height % 100), pickle.dumps(undo_info))
+    def write_undo_info(self, height, undo_info):
+        self.db_undo.put("undo_info_%d" % height, pickle.dumps(undo_info))
 
     @staticmethod
     def common_prefix(word1, word2):
@@ -616,10 +607,10 @@ class Storage(object):
         self.db_addr.delete(txi)
         # add to history
         s = self.db_hist.get(addr)
-        if s is None: s = ''
+        if s is None:
+            s = ''
         txo = (txid + int_to_hex(index, 4) + int_to_hex(height, 4)).decode('hex')
         s += txi + int_to_hex(in_height, 4).decode('hex') + txo
-        s = s[-80 * self.pruning_limit:]
         self.db_hist.put(addr, s)
 
     def revert_set_spent(self, addr, txi, undo):

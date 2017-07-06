@@ -454,8 +454,8 @@ class BlockchainProcessorBase(Processor):
 
         # add undo info
         if not revert:
-            self.storage.write_undo_info(block_height, self.lbrycrdd_height, undo_info)
-            self.storage.write_undo_claim_info(block_height, self.lbrycrdd_height, claim_undo_info)
+            self.storage.write_undo_info(block_height, undo_info)
+            self.storage.write_undo_claim_info(block_height, claim_undo_info)
 
         # add the max
         self.storage.save_height(block_hash, block_height)

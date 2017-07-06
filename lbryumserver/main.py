@@ -129,9 +129,8 @@ def create_config(filename=None):
 
     config.add_section('leveldb')
     config.set('leveldb', 'path', os.path.join(DEFAULT_DATA_DIR, 'lbryum_db'))
-    config.set('leveldb', 'pruning_limit', '100')
     config.set('leveldb', 'utxo_cache', str(64 * 1024 * 1024))
-    config.set('leveldb', 'hist_cache', str(128 * 1024 * 1024))
+    config.set('leveldb', 'hist_cache', str(80 * 1024))
     config.set('leveldb', 'addr_cache', str(16 * 1024 * 1024))
     config.set('leveldb', 'claimid_cache', str(16 * 1024 * 1024 * 8))
 
