@@ -7,11 +7,7 @@ labeled as 2.7.1. Subsequent releases will follow
 [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
-### Added
-  * Added changelog
-  *
-
-### Changed
+### Security
   *
   *
 
@@ -23,6 +19,21 @@ labeled as 2.7.1. Subsequent releases will follow
   *
   *
 
+### Changed
+  *
+  *
+
+### Added
+  *
+  *
+
 ### Removed
   *
   *
+
+
+## [1.0.12] - 2017-07-24
+### Added
+ * Added changelog
+
+
