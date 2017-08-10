@@ -995,6 +995,11 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
                 stored_claim = self.get_claim_info(claim_id)
                 claims.append(stored_claim)
             result['claims'] = claims
+            result['supports_without_claims'] = result['supports without claims']
+            del result['supports without claims']
+            result['last_takeover_height'] = result['nLastTakeoverHeight']
+            del result['nLastTakeoverHeight']
+
         return result
 
     @command('blockchain.block.get_block')
