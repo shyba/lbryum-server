@@ -138,6 +138,7 @@ class DB(object):
 
     def put(self, key, s):
         self.batch.put(key, s)
+        print_log("not batch put")
         self.cache[key] = s
 
     def get(self, key):
