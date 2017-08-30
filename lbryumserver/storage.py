@@ -184,7 +184,7 @@ class Storage(object):
             # key = address key, value = utxos
             self.db_utxo = DB(self.dbpath, 'utxo', config.getint('leveldb', 'utxo_cache'))
             # key = address, value = history
-            self.db_hist = DB(self.dbpath, 'hist', config.getint('leveldb', 'hist_cache'))
+            self.db_hist = DB(self.dbpath, 'hist', 80 * 1024 * 1024)  #config.getint('leveldb', 'hist_cache'))
             # key = outpoint, value = address
             self.db_addr = DB(self.dbpath, 'addr', config.getint('leveldb', 'addr_cache'))
             # key = undo id, valude = undo info
