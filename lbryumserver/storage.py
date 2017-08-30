@@ -646,7 +646,8 @@ class Storage(object):
             prev_addr.append(addr)
 
         undo['prev_addr'] = prev_addr
-
+        print_log("Prev addrs %i" % len(undo['prev_addr']))
+        
         # here I add only the outputs to history; maybe I want to add inputs too (that's in the other loop)
         for x in tx.get('outputs'):
             addr = x.get('address')
