@@ -441,9 +441,10 @@ class BlockchainProcessorBase(Processor):
             if not revert:
                 undo = self.storage.import_transaction(txid, tx, block_height, touched_addr)
                 undo_info[txid] = undo
-
+                print_log("Got tx undo info")
                 undo = self.storage.import_claim_transaction(txid, tx, block_height)
                 claim_undo_info[txid] = undo
+                print_log("Got claim undo info")
             else:
                 undo = undo_info.pop(txid)
                 self.storage.revert_transaction(txid, tx, block_height, touched_addr, undo)
