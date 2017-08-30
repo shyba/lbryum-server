@@ -639,7 +639,9 @@ class Storage(object):
         prev_addr = []
         for i, x in enumerate(tx.get('inputs')):
             txi = (x.get('prevout_hash') + int_to_hex(x.get('prevout_n'), 4)).decode('hex')
+            print_log("TXi %s" % txi.encode('hex'))
             addr = self.get_address(txi)
+            print_log("Addr %s" % addr)
             if addr is not None:
                 self.set_spent(addr, txi, txid, i, block_height, undo)
                 touched_addr.add(addr)
