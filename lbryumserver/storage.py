@@ -614,6 +614,7 @@ class Storage(object):
             s = ''
         txo = (txid + int_to_hex(index, 4) + int_to_hex(height, 4)).decode('hex')
         s += txi + int_to_hex(in_height, 4).decode('hex') + txo
+        print_log("Save hist (%i bytes)" % len(s))
         self.db_hist.put(addr, s)
         print_log("Saved hist")
 
