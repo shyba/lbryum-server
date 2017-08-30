@@ -138,7 +138,7 @@ class DB(object):
 
     def put(self, key, s):
         self.batch.put(key, s)
-        print_log("not batch put")
+        print_log("successfully put %i bytes to %s" % (len(s), key))
         self.cache[key] = s
 
     def get(self, key):
