@@ -420,6 +420,7 @@ class BlockchainProcessorBase(Processor):
 
 
     def import_block(self, block, block_hash, block_height, revert=False):
+        print_log("Importing block %i (%s)" % (block_height, block_hash))
 
         touched_addr = set()
 
@@ -435,6 +436,7 @@ class BlockchainProcessorBase(Processor):
             undo_info = {}
             claim_undo_info = {}
         for txid in tx_hashes:  # must be ordered
+            print_log("Import transaction %s" % txid)
             tx = txdict[txid]
             if not revert:
                 undo = self.storage.import_transaction(txid, tx, block_height, touched_addr)
