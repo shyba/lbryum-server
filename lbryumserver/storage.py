@@ -600,18 +600,22 @@ class Storage(object):
         key = self.address_to_key(addr)
         leaf = key + txi
         s = self.delete_key(leaf)
+        print_log("Deleted leaf")
         value = hex_to_int(s[0:8])
         in_height = hex_to_int(s[8:12])
         undo[leaf] = value, in_height
         # delete backlink txi-> addr
         self.db_addr.delete(txi)
+        print_log("Deleted txi")
         # add to history
         s = self.db_hist.get(addr)
+        print_log("Got hist")
         if s is None:
             s = ''
         txo = (txid + int_to_hex(index, 4) + int_to_hex(height, 4)).decode('hex')
         s += txi + int_to_hex(in_height, 4).decode('hex') + txo
         self.db_hist.put(addr, s)
+        print_log("Saved hist")
 
     def revert_set_spent(self, addr, txi, undo):
         key = self.address_to_key(addr)
