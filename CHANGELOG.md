@@ -32,6 +32,10 @@ labeled as 2.7.1. Subsequent releases will follow
   *
 
 
+## [1.0.15] - 2017-10-12
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.12 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0012---2017-10-12)
+
 ## [1.0.14] - 2017-09-18
 ### Changed
  * Bumped `lbryschema` requirement to 0.0.11 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0011---2017-09-18)
