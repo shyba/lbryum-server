@@ -20,7 +20,7 @@ labeled as 2.7.1. Subsequent releases will follow
   *
 
 ### Changed
-  * Bump `jsonschema` requirement to 2.6.0
+  *
   *
 
 ### Added
@@ -30,6 +30,12 @@ labeled as 2.7.1. Subsequent releases will follow
 ### Removed
   *
   *
+
+
+## [1.0.16] - 2017-10-25
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.13 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0013---2017-10-25)
+ * Bump `jsonschema` requirement to 2.6.0
 
 
 ## [1.0.15] - 2017-10-12
