@@ -20,7 +20,7 @@ labeled as 2.7.1. Subsequent releases will follow
   *
 
 ### Changed
-  *
+  * Bump `jsonschema` requirement to 2.6.0
   *
 
 ### Added
