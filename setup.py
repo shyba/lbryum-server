@@ -8,7 +8,7 @@ requires = [
     'jsonrpclib',
     'python-bitcoinrpc==0.1',
     'appdirs==1.4.3',
-    'lbryschema==0.0.13',
+    'lbryschema==0.0.14rc1',
 ]
 
 if sys.platform == "darwin":
