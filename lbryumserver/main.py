@@ -26,6 +26,7 @@ import os
 import xmlrpclib
 import signal
 import traceback
+import lbryschema
 
 from lbryumserver import storage, networks, utils
 from lbryumserver.processor import Dispatcher, print_log
@@ -86,13 +87,14 @@ def attempt_read_config(config, filename):
 
 
 def setup_network_settings(config):
-    type = config.get('network', 'type')
-    params = networks.params.get(type)
+    network_type = config.get('network', 'type')
+    params = networks.params.get(network_type)
     utils.PUBKEY_ADDRESS = int(params.get('pubkey_address'))
     utils.SCRIPT_ADDRESS = int(params.get('script_address'))
     utils.PUBKEY_ADDRESS_PREFIX = int(params.get('pubkey_address_prefix'))
     utils.SCRIPT_ADDRESS_PREFIX = int(params.get('script_address_prefix'))
     storage.GENESIS_HASH = params.get('genesis_hash')
+    lbryschema.BLOCKCHAIN_NAME = network_type
 
 
 DEFAULT_DATA_DIR = os.path.join(os.path.expanduser("~/"), '.lbryumserver')
