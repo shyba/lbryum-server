@@ -116,7 +116,7 @@ class BlockchainProcessorBase(Processor):
             if self.shared.paused():
                 print_log("lbrycrdd is responding")
                 self.shared.unpause()
-            time.sleep(10)
+            time.sleep(0.1)
 
     def set_time(self):
         self.time_ref = time.time()
