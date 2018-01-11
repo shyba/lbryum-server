@@ -149,7 +149,7 @@ class BlockchainProcessorBase(Processor):
 
     def wait_on_lbrycrdd(self):
         self.shared.pause()
-        time.sleep(10)
+        time.sleep(0.1)
         if self.shared.stopped():
             # this will end the thread
             raise BaseException()
