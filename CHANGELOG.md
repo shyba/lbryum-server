@@ -12,7 +12,7 @@ labeled as 2.7.1. Subsequent releases will follow
   *
 
 ### Fixed
-  *
+  * Fixed address histories taking 10 seconds to update
   *
 
 ### Deprecated
