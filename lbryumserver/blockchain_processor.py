@@ -1082,7 +1082,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
             certificate = None
             if parsed_uri.claim_id:
                 certificate_info = self.get_claim_info(parsed_uri.claim_id)
-                if certificate_info:
+                if certificate_info and certificate_info['name'] == parsed_uri.name:
                     certificate = {'resolution_type': CLAIM_ID, 'result': certificate_info}
             elif parsed_uri.claim_sequence:
                 claim_id = self.storage.get_claimid_for_nth_claim_to_name(str(parsed_uri.name),
@@ -1118,7 +1118,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
             claim = None
             if parsed_uri.claim_id:
                 claim_info = self.get_claim_info(parsed_uri.claim_id)
-                if claim_info:
+                if claim_info and claim_info['name'] == parsed_uri.name:
                     claim = {'resolution_type': CLAIM_ID, 'result': claim_info}
             elif parsed_uri.claim_sequence:
                 claim_id = self.storage.get_claimid_for_nth_claim_to_name(str(parsed_uri.name),
