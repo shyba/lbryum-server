@@ -12,8 +12,8 @@ labeled as 2.7.1. Subsequent releases will follow
   *
 
 ### Fixed
-  * Fixed address histories taking 10 seconds to update
-  * Fixed bug handling uris for a claim specified by `claim_id` where the name does not match the name in the uri [#43](https://github.com/lbryio/lbryum-server/issues/43).
+  *
+  *
 
 ### Deprecated
   *
@@ -30,6 +30,12 @@ labeled as 2.7.1. Subsequent releases will follow
 ### Removed
   *
   *
+
+
+## [1.0.18] - 2018-01-28
+### Fixed
+ * Fixed address histories taking 10 seconds to update
+ * Fixed bug handling uris for a claim specified by `claim_id` where the name does not match the name in the uri [#43](https://github.com/lbryio/lbryum-server/issues/43).
 
 
 ## [1.0.17] - 2017-11-08
