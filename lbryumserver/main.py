@@ -106,7 +106,7 @@ if not os.path.isdir(DEFAULT_LBRYUM_LOG_DIR):
     os.mkdir(DEFAULT_LBRYUM_LOG_DIR)
 
 
-def create_config(filename=None):
+def create_config(filename=None, lbrycrdd_dir=None):
     config = ConfigParser.ConfigParser()
     # set some defaults, which will be overwritten by the config file
     config.add_section('server')
@@ -144,20 +144,6 @@ def create_config(filename=None):
     config.add_section('network')
     config.set('network', 'type', 'lbrycrd_main')
 
-    if sys.platform == "darwin":
-        default_lbrycrdd_dir = os.path.join(os.path.expanduser("~/"), "Library", "Application Support", "lbrycrd")
-    else:
-        default_lbrycrdd_dir = os.path.join(os.path.expanduser("~/"), ".lbrycrd")
-
-    lbrycrdd_conf = os.path.join(default_lbrycrdd_dir, "lbrycrd.conf")
-    if os.path.isfile(lbrycrdd_conf):
-        print_log("loading lbrycrdd info")
-        load_lbrycrdd_connection_info(config, lbrycrdd_conf)
-        found_lbrycrdd = True
-    else:
-        print_log("no config for lbrycrdd found (%s)" % lbrycrdd_conf)
-        found_lbrycrdd = False
-
     # try to find the config file in the default paths
     if not filename:
         if sys.platform == "darwin":
@@ -168,13 +154,28 @@ def create_config(filename=None):
                 if os.path.isfile(filename):
                     break
 
+    attempt_read_config(config, filename)
+
+    if sys.platform == "darwin":
+        default_lbrycrdd_dir = os.path.join(os.path.expanduser("~/"), "Library", "Application Support", "lbrycrd")
+    else:
+        default_lbrycrdd_dir = os.path.join(os.path.expanduser("~/"), ".lbrycrd")
+
+    lbrycrdd_dir = lbrycrdd_dir or default_lbrycrdd_dir
+    lbrycrdd_conf = os.path.join(lbrycrdd_dir, "lbrycrd.conf")
+    if os.path.isfile(lbrycrdd_conf):
+        print_log("loading lbrycrdd info")
+        load_lbrycrdd_connection_info(config, lbrycrdd_conf)
+        found_lbrycrdd = True
+    else:
+        print_log("no config for lbrycrdd found (%s)" % lbrycrdd_conf)
+        found_lbrycrdd = False
+
     if not os.path.isfile(filename):
         print 'could not find lbryum configuration file "%s"' % filename
         if not found_lbrycrdd:
             print "could not find lbrycrdd configutation file"
             sys.exit(1)
-
-    attempt_read_config(config, filename)
 
     return config
 
