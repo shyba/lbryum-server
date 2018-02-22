@@ -549,18 +549,21 @@ class BlockchainProcessorBase(Processor):
 
     def catch_up(self, sync=True):
         self.start_catchup_height = self.storage.height
+        missing_blocks = 0
         prev_root_hash = None
         n = 0
 
         while not self.shared.stopped():
             # are we done yet?
-            info = self.lbrycrdd('getinfo')
-            self.relayfee = info.get('relayfee')
-            self.lbrycrdd_height = info.get('blocks')
-            lbrycrdd_block_hash = self.lbrycrdd('getblockhash', (self.lbrycrdd_height,))
-            if self.storage.last_hash == lbrycrdd_block_hash:
-                self.up_to_date = True
-                break
+            if not (missing_blocks > 100):
+                info = self.lbrycrdd('getinfo')
+                self.relayfee = info.get('relayfee')
+                self.lbrycrdd_height = info.get('blocks')
+                lbrycrdd_block_hash = self.lbrycrdd('getblockhash', (self.lbrycrdd_height,))
+                if self.storage.last_hash == lbrycrdd_block_hash:
+                    self.up_to_date = True
+                    break
+                missing_blocks = info.get('blocks') - self.storage.height
 
             self.set_time()
 
@@ -581,7 +584,8 @@ class BlockchainProcessorBase(Processor):
 
                 n = self.import_block(next_block, next_block_hash, self.storage.height + 1)
                 self.storage.height = self.storage.height + 1
-                self.write_header(self.block2header(next_block), sync)
+                self.header = self.block2header(next_block)
+                self.write_header(self.header, sync)
                 self.storage.last_hash = next_block_hash
 
             else:
@@ -606,8 +610,8 @@ class BlockchainProcessorBase(Processor):
 
             # print time
             self.print_time(n)
+            missing_blocks -= 1
 
-        self.header = self.block2header(self.lbrycrdd('getblock', (self.storage.last_hash,)))
         self.header['utxo_root'] = self.storage.get_root_hash().encode('hex')
 
         if self.shared.stopped():
