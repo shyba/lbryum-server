@@ -924,6 +924,18 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
         height = int(height)
         return self.get_merkle(tx_hash, height, cache_only)
 
+    @command('blockchain.transaction.get_height')
+    def cmd_transaction_get_height(self, tx_hash):
+        tx_hash = str(tx_hash)
+        transaction_info = self.lbrycrdd('getrawtransaction', (tx_hash, 1))
+        if transaction_info and 'hex' in transaction_info and 'confirmations' in transaction_info:
+            # an unconfirmed transaction from lbrycrdd will not have a 'confirmations' field
+            height = self.lbrycrdd_height - transaction_info['confirmations']
+            return height
+        elif transaction_info and 'hex' in transaction_info:
+            return -1
+        return None
+
     @command('blockchain.transaction.get')
     def cmd_transaction_get(self, tx_hash, height=None):
         # height argument does nothing here but is used in lbryum synchronizer
