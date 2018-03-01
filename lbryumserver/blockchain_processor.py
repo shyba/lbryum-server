@@ -181,6 +181,13 @@ class BlockchainProcessorBase(Processor):
             # this will end the thread
             raise BaseException()
 
+    def get_claims_for_name(self, claim_name):
+        cache_key = 'getclaimsforname' + claim_name
+        if cache_key in self.short_term_cache: return self.short_term_cache.get(cache_key)
+        lbrycrdd_results = self.lbrycrdd("getclaimsforname", (claim_name, ))
+        self.short_term_cache.put(cache_key, lbrycrdd_results)
+        return lbrycrdd_results
+
     def lbrycrdd(self, method, args=()):
         while True:
             try:
@@ -546,7 +553,7 @@ class BlockchainProcessorBase(Processor):
                 "claim_sequence": claim_sequence,
                 "address": claim_address
             }
-            lbrycrdd_results = self.lbrycrdd("getclaimsforname", (claim_name, ))
+            lbrycrdd_results = self.get_claims_for_name(claim_name)
             lbrycrdd_claim = None
             if lbrycrdd_results:
                 for claim in lbrycrdd_results['claims']:
@@ -997,7 +1004,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
             claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
             result['height'] = transaction_height + 1
 
-        claim_info = self.lbrycrdd('getclaimsforname', (name,))
+        claim_info = self.get_claims_for_name(name)
         supports = []
         if len(claim_info['claims']) > 0:
             for claim in claim_info['claims']:
@@ -1027,7 +1034,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
     @command('blockchain.claimtrie.getclaimsforname')
     def cmd_claimtrie_getclaimsforname(self, name):
         name = str(name)
-        result = self.lbrycrdd('getclaimsforname', (name,))
+        result = self.get_claims_for_name(name)
         if result:
             claims = []
             for claim in result['claims']:
