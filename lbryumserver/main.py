@@ -145,6 +145,7 @@ def create_config(filename=None):
     config.set('caching', 'data_dir', os.path.join(DEFAULT_DATA_DIR, 'beaker'))
     config.set('caching', 'type', 'dbm')
     config.set('caching', 'short_expire', '60')
+    config.set('caching', 'long_expire', '600')
 
     # set network parameters
     config.add_section('network')

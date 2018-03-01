@@ -7,6 +7,9 @@ import time
 import threading
 import traceback
 
+from beaker.cache import CacheManager
+from beaker.util import parse_cache_config_options
+
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 
 from lbryumserver import deserialize
@@ -18,7 +21,6 @@ from lbryumserver.utils import header_to_string, ProfiledThread, rev_hex, int_to
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError, DecodeError
 from lbryschema.decode import smart_decode
-from beaker.cache import cache_regions, cache_region
 
 HEADER_SIZE = 112
 BLOCKS_PER_CHUNK = 96
@@ -42,13 +44,25 @@ def command(cmd_name):
 
 def setup_caching(config):
     cache_type = config.get('caching', 'type')
+    data_dir = config.get('caching', 'data_dir')
     short_expire = config.get('caching', 'short_expire')
-    cache_config = {'expire': int(short_expire), 'type': cache_type}
-    if cache_type in ['file', 'dbm']:
-        cache_config['data_dir'] = config.get('caching', 'data_dir')
-    # configure regions
-    cache_regions.update({'short_term':cache_config})
+    long_expire = config.get('caching', 'long_expire')
 
+    cache_opts = {
+        'cache.type': cache_type,
+        'cache.data_dir': data_dir,
+        'cache.lock_dir': data_dir,
+        'cache.regions': 'short_term, long_term',
+        'cache.short_term.type': cache_type,
+        'cache.short_term.expire': short_expire,
+        'cache.long_term.type': cache_type,
+        'cache.long_term.expire': long_expire,
+    }
+
+    cache_manager = CacheManager(**parse_cache_config_options(cache_opts))
+    short_term_cache = cache_manager.get_cache('short_term', expire=short_expire)
+    long_term_cache = cache_manager.get_cache('long_term', expire=long_expire)
+    return short_term_cache, long_term_cache
 
 
 def lbrycrd_proof_has_winning_claim(proof):
@@ -60,7 +74,7 @@ class BlockchainProcessorBase(Processor):
         Processor.__init__(self)
 
         # monitoring
-        setup_caching(config)
+        self.short_term_cache, self.long_term_cache = setup_caching(config)
         self.avg_time = 0, 0, 0
         self.time_ref = time.time()
 
@@ -433,6 +447,7 @@ class BlockchainProcessorBase(Processor):
 
 
     def import_block(self, block, block_hash, block_height, revert=False):
+        self.short_term_cache.clear()
 
         touched_addr = set()
 
@@ -1082,10 +1097,12 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
         return result
 
     @command('blockchain.claimtrie.getvalueforuri')
-    @cache_region('short_term', 'getvalueforuri')
     def cmd_claimtrie_get_value_for_uri(self, block_hash, uri):
         uri = str(uri)
         block_hash = str(block_hash)
+        cache_key = block_hash + uri
+        if cache_key in self.short_term_cache:
+            return self.short_term_cache.get(cache_key)
         try:
             parsed_uri = parse_lbry_uri(uri)
         except URIParseError as err:
@@ -1159,6 +1176,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
                 except DecodeError:
                     pass
                 result['claim'] = claim
+        self.short_term_cache.put(cache_key, result)
         return result
 
     @command('blockchain.claimtrie.getvaluesforuris')
