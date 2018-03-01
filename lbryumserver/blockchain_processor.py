@@ -18,6 +18,7 @@ from lbryumserver.utils import header_to_string, ProfiledThread, rev_hex, int_to
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError, DecodeError
 from lbryschema.decode import smart_decode
+from beaker.cache import cache_regions, cache_region
 
 HEADER_SIZE = 112
 BLOCKS_PER_CHUNK = 96
@@ -39,6 +40,17 @@ def command(cmd_name):
     return _wrapper
 
 
+def setup_caching(config):
+    cache_type = config.get('caching', 'type')
+    short_expire = config.get('caching', 'short_expire')
+    cache_config = {'expire': int(short_expire), 'type': cache_type}
+    if cache_type in ['file', 'dbm']:
+        cache_config['data_dir'] = config.get('caching', 'data_dir')
+    # configure regions
+    cache_regions.update({'short_term':cache_config})
+
+
+
 def lbrycrd_proof_has_winning_claim(proof):
     return 'txhash' in proof and 'nOut' in proof
 
@@ -48,6 +60,7 @@ class BlockchainProcessorBase(Processor):
         Processor.__init__(self)
 
         # monitoring
+        setup_caching(config)
         self.avg_time = 0, 0, 0
         self.time_ref = time.time()
 
@@ -1069,6 +1082,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
         return result
 
     @command('blockchain.claimtrie.getvalueforuri')
+    @cache_region('short_term', 'getvalueforuri')
     def cmd_claimtrie_get_value_for_uri(self, block_hash, uri):
         uri = str(uri)
         block_hash = str(block_hash)
