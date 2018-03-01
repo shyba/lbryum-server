@@ -1,4 +1,5 @@
 import json
+import errno
 import Queue as queue
 import socket
 import select
@@ -225,7 +226,13 @@ class TcpServer(threading.Thread):
                     if now - session.time > session.timeout:
                         stop_session(fd)
 
-                events = poller.poll(TIMEOUT)
+                try:
+                    events = poller.poll(TIMEOUT)
+                except select.error as (code, msg):
+                    if code != errno.EINTR:
+                        raise
+                    events = []
+
 
             for fd, flag in events:
                 # open new session
