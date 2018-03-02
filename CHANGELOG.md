@@ -20,16 +20,24 @@ labeled as 2.7.1. Subsequent releases will follow
   *
 
 ### Changed
-  * Updated dependency for leveldb
+  *
   *
 
 ### Added
-  * Added `blockchain.transaction.get_height` command
+  *
   *
 
 ### Removed
   *
   *
+
+
+## [1.0.19] - 2018-03-02
+### Changed
+ * Updated dependency for leveldb
+
+### Added
+ * Added `blockchain.transaction.get_height` command
 
 
 ## [1.0.18] - 2018-01-28
