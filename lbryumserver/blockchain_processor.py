@@ -182,10 +182,17 @@ class BlockchainProcessorBase(Processor):
             raise BaseException()
 
     def get_claims_for_name(self, claim_name):
-        cache_key = 'getclaimsforname' + claim_name
-        if cache_key in self.short_term_cache: return self.short_term_cache.get(cache_key)
+        cache, cache_key = self.short_term_cache, 'getclaimsforname' + claim_name
+        if cache_key in cache: return cache.get(cache_key)
         lbrycrdd_results = self.lbrycrdd("getclaimsforname", (claim_name, ))
-        self.short_term_cache.put(cache_key, lbrycrdd_results)
+        cache.put(cache_key, lbrycrdd_results)
+        return lbrycrdd_results
+
+    def get_raw_transaction(self, tx_hash):
+        cache, cache_key = self.long_term_cache, 'getrawtransaction' + tx_hash
+        if cache_key in cache: return cache.get(cache_key)
+        lbrycrdd_results = self.lbrycrdd('getrawtransaction', (tx_hash, 0))
+        cache.put(cache_key, lbrycrdd_results)
         return lbrycrdd_results
 
     def lbrycrdd(self, method, args=()):
@@ -975,7 +982,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
     def cmd_transaction_get(self, tx_hash, height=None):
         # height argument does nothing here but is used in lbryum synchronizer
         tx_hash = str(tx_hash)
-        return self.lbrycrdd('getrawtransaction', (tx_hash, 0))
+        return self.get_raw_transaction(tx_hash)
 
     @command('blockchain.estimatefee')
     def cmd_estimate_fee(self, num):
