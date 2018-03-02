@@ -73,9 +73,11 @@ def load_lbrycrdd_connection_info(config, wallet_conf):
     for k, v in parse_lbrycrdd(conf_lines):
         lbrycrdd_settings.update({k: v})
     settings.update(lbrycrdd_settings)
-    config.add_section('lbrycrdd')
+    if not config.has_section('lbrycrdd'):
+        config.add_section('lbrycrdd')
     for k, v in settings.iteritems():
-        config.set('lbrycrdd', k, v)
+        if not config.has_option('lbrycrdd', k):
+            config.set('lbrycrdd', k, v)
 
 
 def attempt_read_config(config, filename):
