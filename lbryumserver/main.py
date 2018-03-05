@@ -142,6 +142,13 @@ def create_config(filename=None, lbrycrdd_dir=None):
 
     config.set('leveldb', 'profiler', 'no')
 
+    # Beaker caching
+    config.add_section('caching')
+    config.set('caching', 'data_dir', os.path.join(DEFAULT_DATA_DIR, 'beaker'))
+    config.set('caching', 'type', 'dbm')
+    config.set('caching', 'short_expire', '60')
+    config.set('caching', 'long_expire', '600')
+
     # set network parameters
     config.add_section('network')
     config.set('network', 'type', 'lbrycrd_main')

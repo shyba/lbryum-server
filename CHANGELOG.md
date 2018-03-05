@@ -20,8 +20,8 @@ labeled as 2.7.1. Subsequent releases will follow
   *
 
 ### Changed
-  *
-  *
+  * internal `get_claims_for_name` and `get_raw_transaction` methods to use beaker caching
+  * `blockchain.claimtrie.getvalueforuri` and `blockchain.claimtrie.getclaimsforname` to use beaker caching
 
 ### Added
   *

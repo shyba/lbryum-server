@@ -7,6 +7,9 @@ import time
 import threading
 import traceback
 
+from beaker.cache import CacheManager
+from beaker.util import parse_cache_config_options
+
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 
 from lbryumserver import deserialize
@@ -39,6 +42,29 @@ def command(cmd_name):
     return _wrapper
 
 
+def setup_caching(config):
+    cache_type = config.get('caching', 'type')
+    data_dir = config.get('caching', 'data_dir')
+    short_expire = config.get('caching', 'short_expire')
+    long_expire = config.get('caching', 'long_expire')
+
+    cache_opts = {
+        'cache.type': cache_type,
+        'cache.data_dir': data_dir,
+        'cache.lock_dir': data_dir,
+        'cache.regions': 'short_term, long_term',
+        'cache.short_term.type': cache_type,
+        'cache.short_term.expire': short_expire,
+        'cache.long_term.type': cache_type,
+        'cache.long_term.expire': long_expire,
+    }
+
+    cache_manager = CacheManager(**parse_cache_config_options(cache_opts))
+    short_term_cache = cache_manager.get_cache('short_term', expire=short_expire)
+    long_term_cache = cache_manager.get_cache('long_term', expire=long_expire)
+    return short_term_cache, long_term_cache
+
+
 def lbrycrd_proof_has_winning_claim(proof):
     return 'txhash' in proof and 'nOut' in proof
 
@@ -48,6 +74,7 @@ class BlockchainProcessorBase(Processor):
         Processor.__init__(self)
 
         # monitoring
+        self.short_term_cache, self.long_term_cache = setup_caching(config)
         self.avg_time = 0, 0, 0
         self.time_ref = time.time()
 
@@ -153,6 +180,20 @@ class BlockchainProcessorBase(Processor):
         if self.shared.stopped():
             # this will end the thread
             raise BaseException()
+
+    def get_claims_for_name(self, claim_name):
+        cache, cache_key = self.short_term_cache, 'getclaimsforname' + claim_name
+        if cache_key in cache: return cache.get(cache_key)
+        lbrycrdd_results = self.lbrycrdd("getclaimsforname", (claim_name, ))
+        cache.put(cache_key, lbrycrdd_results)
+        return lbrycrdd_results
+
+    def get_raw_transaction(self, tx_hash):
+        cache, cache_key = self.long_term_cache, 'getrawtransaction' + tx_hash
+        if cache_key in cache: return cache.get(cache_key)
+        lbrycrdd_results = self.lbrycrdd('getrawtransaction', (tx_hash, 0))
+        cache.put(cache_key, lbrycrdd_results)
+        return lbrycrdd_results
 
     def lbrycrdd(self, method, args=()):
         while True:
@@ -420,6 +461,7 @@ class BlockchainProcessorBase(Processor):
 
 
     def import_block(self, block, block_hash, block_height, revert=False):
+        self.short_term_cache.clear()
 
         touched_addr = set()
 
@@ -518,7 +560,7 @@ class BlockchainProcessorBase(Processor):
                 "claim_sequence": claim_sequence,
                 "address": claim_address
             }
-            lbrycrdd_results = self.lbrycrdd("getclaimsforname", (claim_name, ))
+            lbrycrdd_results = self.get_claims_for_name(claim_name)
             lbrycrdd_claim = None
             if lbrycrdd_results:
                 for claim in lbrycrdd_results['claims']:
@@ -940,7 +982,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
     def cmd_transaction_get(self, tx_hash, height=None):
         # height argument does nothing here but is used in lbryum synchronizer
         tx_hash = str(tx_hash)
-        return self.lbrycrdd('getrawtransaction', (tx_hash, 0))
+        return self.get_raw_transaction(tx_hash)
 
     @command('blockchain.estimatefee')
     def cmd_estimate_fee(self, num):
@@ -969,7 +1011,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
             claim_id = self.storage.get_claim_id_from_outpoint(txid, nout)
             result['height'] = transaction_height + 1
 
-        claim_info = self.lbrycrdd('getclaimsforname', (name,))
+        claim_info = self.get_claims_for_name(name)
         supports = []
         if len(claim_info['claims']) > 0:
             for claim in claim_info['claims']:
@@ -999,7 +1041,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
     @command('blockchain.claimtrie.getclaimsforname')
     def cmd_claimtrie_getclaimsforname(self, name):
         name = str(name)
-        result = self.lbrycrdd('getclaimsforname', (name,))
+        result = self.get_claims_for_name(name)
         if result:
             claims = []
             for claim in result['claims']:
@@ -1084,6 +1126,9 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
     def cmd_claimtrie_get_value_for_uri(self, block_hash, uri):
         uri = str(uri)
         block_hash = str(block_hash)
+        cache_key = block_hash + uri
+        if cache_key in self.short_term_cache:
+            return self.short_term_cache.get(cache_key)
         try:
             parsed_uri = parse_lbry_uri(uri)
         except URIParseError as err:
@@ -1157,6 +1202,7 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
                 except DecodeError:
                     pass
                 result['claim'] = claim
+        self.short_term_cache.put(cache_key, result)
         return result
 
     @command('blockchain.claimtrie.getvaluesforuris')
