@@ -11,6 +11,7 @@ try:
 except ImportError:
     SSL_IMPORTED = False
 from decimal import Decimal
+from twisted.internet import defer
 from lbryumserver.processor import Session
 from lbryumserver.utils import print_log, logger
 
@@ -106,6 +107,9 @@ class TcpServer(threading.Thread):
         self.fd_to_session = {}
         self.buffer_size = 4096
 
+        self.started = defer.Deferred()
+        self.stopped = defer.Deferred()
+
     def handle_command(self, raw_command, session):
         try:
             command = json.loads(raw_command)
@@ -150,6 +154,8 @@ class TcpServer(threading.Thread):
             print_log("could not open " + ("SSL" if self.use_ssl else "TCP") + " socket on %s:%d" % (host, self.port))
             return
         print_log(("SSL" if self.use_ssl else "TCP") + " server started on %s:%d" % (host, self.port))
+        if not self.started.called:
+            self.started.callback(True)
 
         sock_fd = sock.fileno()
         poller = select.poll()
@@ -326,3 +332,5 @@ class TcpServer(threading.Thread):
                     stop_session(fd)
 
         print_log('TCP thread terminating', self.shared.stopped())
+        if not self.stopped.called:
+            self.stopped.callback(True)

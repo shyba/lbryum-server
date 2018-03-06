@@ -330,6 +330,8 @@ def start_server(config):
     for server in transports:
         server.start()
 
+    return transports
+
 
 def stop_server():
     shared.stop()
