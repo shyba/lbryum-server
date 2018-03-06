@@ -10,7 +10,7 @@ requires = [
     'appdirs==1.4.3',
     'lbryschema==0.0.15rc2',
     'beaker==1.9.0',
-    'twisted==16.6.0
+    'twisted==16.6.0'
 ]
 
 if sys.platform == "darwin":
