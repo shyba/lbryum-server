@@ -28,7 +28,7 @@ labeled as 2.7.1. Subsequent releases will follow
   *
 
 ### Removed
-  *
+  * `blockchain.claimtrie.get` command
   *
 
 

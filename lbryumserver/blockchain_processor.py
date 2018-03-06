@@ -1061,10 +1061,6 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
         block_hash = str(block_hash)
         return self.lbrycrdd('getblock', (block_hash,))
 
-    @command('blockchain.claimtrie.get')
-    def cmd_claimtrie_get(self):
-        return self.lbrycrdd('getclaimtrie')
-
     @command('blockchain.claimtrie.getclaimbyid')
     def cmd_claimtrie_getclaimbyid(self, claim_id):
         # TODO: add what proof is possible for claim id
