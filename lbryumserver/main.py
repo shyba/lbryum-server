@@ -269,12 +269,13 @@ tcp_server = None
 ssl_server = None
 
 
-def start_server(config):
+def start_server(config, setup_logging=True):
     global shared, chain_proc, server_proc, dispatcher
     global tcp_server, ssl_server
 
     logfile = config.get('server', 'logfile')
-    utils.init_logger(logfile)
+    if setup_logging:
+        utils.init_logger(logfile)
     host = config.get('server', 'host')
     stratum_tcp_port = get_port(config, 'stratum_tcp_port')
     stratum_http_port = get_port(config, 'stratum_http_port')
