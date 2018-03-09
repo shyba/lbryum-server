@@ -5,3 +5,4 @@ appdirs==1.4.3
 git+https://github.com/lbryio/lbryschema.git@v0.0.15rc2#egg=lbryschema
 Beaker==1.9.0
 Twisted==16.6.0
+msgpack==0.5.6
