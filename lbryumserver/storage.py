@@ -8,7 +8,7 @@ import os
 import threading
 import json
 import re
-import pickle
+import msgpack
 
 from ecdsa.keys import BadSignatureError
 
@@ -330,10 +330,10 @@ class Storage(object):
         if s is None:
             print_log("no undo info for ", height)
             return None
-        return pickle.loads(s)
+        return msgpack.unpackb(s)
 
     def write_undo_info(self, height, undo_info):
-        self.db_undo.put("undo_info_%d" % height, pickle.dumps(undo_info))
+        self.db_undo.put("undo_info_%d" % height, msgpack.packb(undo_info))
 
     @staticmethod
     def common_prefix(word1, word2):

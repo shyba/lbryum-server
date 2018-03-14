@@ -3,7 +3,7 @@ this file contains ClaimsStorage class which contains
 functions to manipulate the claim information
 """
 
-import pickle
+import msgpack
 
 from lbryschema.decode import smart_decode
 from lbryschema.error import DecodeError, URIParseError
@@ -25,7 +25,7 @@ class ClaimsStorage(Storage):
         claims = self.db_claim_order.get(name)
         if claims is None:
             return None
-        for claim_id, i in pickle.loads(claims).iteritems():
+        for claim_id, i in msgpack.unpackb(claims).iteritems():
             if i == n:
                 return claim_id
 
@@ -33,7 +33,7 @@ class ClaimsStorage(Storage):
         claims = self.db_claim_order.get(name)
         if claims is None:
             return None
-        for id, n in pickle.loads(claims).iteritems():
+        for id, n in msgpack.unpackb(claims).iteritems():
             if id == claim_id:
                 return n
 
@@ -65,26 +65,26 @@ class ClaimsStorage(Storage):
         claims = self.db_claim_order.get(name)
         if claims is None:
             return {}
-        return pickle.loads(claims)
+        return msgpack.unpackb(claims)
 
     def write_claims_for_name(self, name, claims):
         if len(claims) == 0:
             self.db_claim_order.delete(name)
         else:
-            claims = pickle.dumps(claims)
+            claims = msgpack.packb(claims)
             self.db_claim_order.put(name, claims)
 
     def get_claims_signed_by(self, certificate_id):
         claims = self.db_cert_to_claims.get(certificate_id)
         if claims is None:
             return []
-        return pickle.loads(claims)
+        return msgpack.unpackb(claims)
 
     def write_claims_signed_by(self, certificate_id, claims):
         if len(claims) == 0:
             self.db_cert_to_claims.delete(certificate_id)
         else:
-            self.db_cert_to_claims.put(certificate_id,pickle.dumps(claims))
+            self.db_cert_to_claims.put(certificate_id, msgpack.packb(claims))
 
     def get_claim_value(self, claim_id):
         return self.db_claim_values.get(claim_id)
@@ -105,10 +105,10 @@ class ClaimsStorage(Storage):
         if s is None:
             print_log('no undo info for {}'.format(height))
             return None
-        return pickle.loads(s)
+        return msgpack.unpackb(s)
 
     def write_undo_claim_info(self, height, undo_info):
-        self.db_undo_claim.put("undo_info_%d" % height, pickle.dumps(undo_info))
+        self.db_undo_claim.put("undo_info_%d" % height, msgpack.packb(undo_info))
 
     def _get_claim_id(self, txid, nout):
         """ get claim id in hex from txid in hex and nout int """
@@ -332,7 +332,7 @@ class ClaimsStorage(Storage):
         self.db_claim_names.delete(claim_id)
 
         claims_in_db = self.db_claim_order.get(claim_name)
-        claims_for_name = {} if not claims_in_db else pickle.loads(claims_in_db)
+        claims_for_name = {} if not claims_in_db else msgpack.unpackb(claims_in_db)
         claim_n = claims_for_name[claim_id]
         del claims_for_name[claim_id]
 
@@ -341,7 +341,7 @@ class ClaimsStorage(Storage):
                 claims_for_name[cid] = cn-1
 
         self.db_claim_order.delete(claim_name)
-        self.db_claim_order.put(claim_name, pickle.dumps(claims_for_name))
+        self.db_claim_order.put(claim_name, msgpack.packb(claims_for_name))
 
         undo_info = self.import_signed_abandon(claim_id, undo_info)
         return undo_info
