@@ -922,6 +922,10 @@ class BlockchainProcessor(BlockchainSubscriptionProcessor):
         txi = (txid + int_to_hex(pos, 4)).decode('hex')
         return self.storage.get_address(txi)
 
+    @command('blockchain.block.get_server_height')
+    def cmd_get_server_height(self):
+        return self.storage.height
+
     @command('blockchain.block.get_header')
     def cmd_block_get_header(self, height, cache_only=False):
         height = int(height)

@@ -24,7 +24,7 @@ labeled as 2.7.1. Subsequent releases will follow
   * `blockchain.claimtrie.getvalueforuri` and `blockchain.claimtrie.getclaimsforname` to use beaker caching
 
 ### Added
-  *
+  * `blockchain.block.get_server_height` command to return the current block height of the server
   *
 
 ### Removed
