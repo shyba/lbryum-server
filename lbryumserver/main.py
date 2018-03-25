@@ -27,12 +27,15 @@ import xmlrpclib
 import signal
 import traceback
 import lbryschema
+from twisted.internet import reactor
+from twisted.internet.endpoints import TCP4ServerEndpoint
 
 from lbryumserver import storage, networks, utils
 from lbryumserver.processor import Dispatcher, print_log
 from lbryumserver.server_processor import ServerProcessor
 from lbryumserver.blockchain_processor import BlockchainProcessor
 from lbryumserver.stratum_tcp import TcpServer
+from lbryumserver.txstratum_tcp import StratumProtocolFactory
 from lbryumserver.stratum_http import HttpServer
 from SimpleXMLRPCServer import SimpleXMLRPCServer
 
@@ -330,6 +333,9 @@ def start_server(config, setup_logging=True):
 
     for server in transports:
         server.start()
+    endpoint = TCP4ServerEndpoint(reactor, 50002)
+    endpoint.listen(StratumProtocolFactory(dispatcher))
+    reactor.run()
 
     return transports
 
