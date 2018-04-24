@@ -303,7 +303,7 @@ class ClaimsStorage(Storage):
 
         undo_info = self._get_undo_info('update', claim_id, claim.name, txid, nout)
 
-        txid_orig_claim,nout_orig_claim,amount = self.get_outpoint_from_claim_id(claim_id)
+        txid_orig_claim, nout_orig_claim, _ = self.get_outpoint_from_claim_id(claim_id)
         self.db_outpoint_to_claim.delete(txid_orig_claim+int_to_hex(nout_orig_claim,4))
         self.write_claim_id_from_outpoint(txid, nout, claim_id)
 
